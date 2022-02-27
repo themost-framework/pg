@@ -63,8 +63,7 @@ class PostgreSQLAdapter {
         const self = this;
         callback = callback || function () { };
         if (self.rawConnection) {
-            callback();
-            return;
+            return callback();
         }
         self.rawConnection = new pg.Client(this.connectionString);
 
@@ -91,9 +90,26 @@ class PostgreSQLAdapter {
      * @param {function(Error=)} callback
      */
     open(callback) {
-        callback = callback || function () { };
-        if (this.rawConnection) { return callback(); }
-        this.connect(callback);
+        if (this.rawConnection) { 
+            return callback();
+        }
+        return this.connect((err) => {
+            return callback(err);
+        });
+    }
+
+    /**
+     * @returns Promise<void>
+     */
+    openAsync() {
+        return new Promise((resolve, reject) => {
+            return this.open((err) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve();
+            });
+        });
     }
 
     /**
@@ -101,10 +117,8 @@ class PostgreSQLAdapter {
      * @param {function(Error=)} callback
      */
     disconnect(callback) {
-        callback = callback || function () { };
         if (typeof this.rawConnection === 'undefined' || this.rawConnection === null) {
-            callback();
-            return;
+            return callback();
         }
         try {
             //try to close connection
@@ -115,13 +129,14 @@ class PostgreSQLAdapter {
                 }
             }
             this.rawConnection = null;
-            callback();
+            return callback();
         }
-        catch (e) {
-            TraceUtils.log('An error occurred while trying to close database connection. ' + e.message);
+        catch (err) {
+            TraceUtils.error('An error occurred while trying to close database connection.');
+            TraceUtils.error(err);
             this.rawConnection = null;
             //do nothing (do not raise an error)
-            callback();
+            return callback();
         }
     }
 
@@ -130,8 +145,21 @@ class PostgreSQLAdapter {
      * @param {function(Error=)} callback
      */
     close(callback) {
-        callback = callback || function () { };
         this.disconnect(callback);
+    }
+
+    /**
+     * @returns Promise<void>
+     */
+     closeAsync() {
+        return new Promise((resolve, reject) => {
+            return this.close((err) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve();
+            });
+        });
     }
 
     /**
@@ -199,6 +227,22 @@ class PostgreSQLAdapter {
         catch (e) {
             callback.call(self, e);
         }
+    }
+
+    /**
+     * @param {*} query
+     * @param {*=} values
+     * @returns Promise<void>
+     */
+     executeAsync(query, values) {
+        return new Promise((resolve, reject) => {
+            return this.execute(query, values, (err, results) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(results);
+            });
+        });
     }
 
     lastIdentity(callback) {
