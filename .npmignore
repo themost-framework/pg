@@ -2,3 +2,7 @@
 spec
 jest.config.js
 babel.config.js
+
+# gitpod
+.gitpod.dockerfile
+.gitpod.yml
