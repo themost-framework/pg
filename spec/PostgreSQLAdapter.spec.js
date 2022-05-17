@@ -54,10 +54,73 @@ describe('PostgreSQLAdapter', () => {
                 type: 'Text',
                 size: 255,
                 nullable: false
+            },
+            {
+                name: 'description',
+                type: 'Text',
+                size: 255,
+                nullable: true
             }
         ]);
         exists = await db.table('Table1').existsAsync();
         expect(exists).toBeTruthy();
+        // get columns
+        const columns = await db.table('Table1').columnsAsync();
+        expect(columns).toBeInstanceOf(Array);
+        let column = columns.find((col) => col.name === 'id' );
+        expect(column).toBeTruthy();
+        expect(column.nullable).toBeFalsy();
+        column = columns.find((col) => col.name === 'description' );
+        expect(column).toBeTruthy();
+        expect(column.nullable).toBeTruthy();
+        expect(column.size).toBe(255);
         await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
+    });
+
+    it('should alter table', async () => {
+        let exists = await db.table('Table2').existsAsync();
+        expect(exists).toBeFalsy();
+        await db.table('Table2').createAsync([
+            {
+                name: 'id',
+                type: 'Counter',
+                primary: true,
+                nullable: false
+            },
+            {
+                name: 'name',
+                type: 'Text',
+                size: 255,
+                nullable: false
+            }
+        ]);
+        exists = await db.table('Table2').existsAsync();
+        expect(exists).toBeTruthy();
+        await db.table('Table2').addAsync([
+            {
+                name: 'description',
+                type: 'Text',
+                size: 255,
+                nullable: true
+            }
+        ]);
+        // get columns
+        let columns = await db.table('Table2').columnsAsync();
+        expect(columns).toBeInstanceOf(Array);
+        let column = columns.find((col) => col.name === 'description' );
+        expect(column).toBeTruthy();
+
+        await db.table('Table2').changeAsync([
+            {
+                name: 'description',
+                type: 'Text',
+                size: 512,
+                nullable: true
+            }
+        ]);
+        columns = await db.table('Table2').columnsAsync();
+        column = columns.find((col) => col.name === 'description' );
+        expect(column.size).toEqual(512);
+        await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table2')}`);
     });
 });

@@ -481,11 +481,14 @@ class PostgreSQLAdapter {
                 s = 'integer';
                 break;
         }
-        if (format === 'alter')
+        if (format === '%t') {
+            return s;
+        }
+        if (format === 'alter') {
             s += (typeof field.nullable === 'undefined') ? ' DROP NOT NULL' : (field.nullable ? ' DROP NOT NULL' : ' SET NOT NULL');
-
-        else
+        } else {
             s += (typeof field.nullable === 'undefined') ? ' NULL' : (field.nullable ? ' NULL' : ' NOT NULL');
+        }
         return s;
     }
 
@@ -602,7 +605,7 @@ class PostgreSQLAdapter {
              * @param {function(Error,string=)} callback
              */
             version: function (callback) {
-                self.execute('SELECT MAX("version") AS version FROM migrations WHERE "appliesTo"=?',
+                self.execute('SELECT MAX("version") AS "version" FROM "migrations" WHERE "appliesTo"=?',
                     [
                         name
                     ], function (err, result) {
@@ -639,24 +642,30 @@ class PostgreSQLAdapter {
                     });
             },
             /**
-             * @param {function(Error,{columnName:string,ordinal:number,dataType:*, maxLength:number,isNullable:number }[]=)} callback
+             * @param {function(Error,{name:string, ordinal:number, type:*, size:number, nullable:boolean }[]=)} callback
              */
             columns: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT column_name AS "columnName", ordinal_position as "ordinal", data_type as "dataType",' +
-                    'character_maximum_length as "maxLength", is_nullable AS  "isNullable", column_default AS "defaultValue"' +
+                self.execute('SELECT column_name AS "name", ordinal_position as "ordinal", data_type as "type",' +
+                    'character_maximum_length as "size", is_nullable AS  "nullable", column_default AS "defaultValue"' +
                     ' FROM information_schema.columns WHERE table_name=? AND table_schema=?',
                     [
                         table,
                         schema
                     ], function (err, result) {
-                        if (err) { callback(err); return; }
-                        callback(null, result);
+                        if (err) { 
+                            return callback(err);
+                        }
+                        // format result
+                        result.forEach((column) => {
+                            column.nullable = (column.nullable === 'YES');
+                        });
+                        return callback(null, result);
                     });
             },
             columnsAsync: function () {
                 return new Promise((resolve, reject) => {
-                    self.columns((err, res) => {
+                    this.columns((err, res) => {
                         if (err) {
                             return reject(err);
                         }
@@ -761,9 +770,12 @@ class PostgreSQLAdapter {
                     return callback();
                 }
                 //generate SQL statement
-                const escapedTable = new PostgreSQLFormatter().escapeName(name);
+                const formatter = new PostgreSQLFormatter();
+                const escapedTable = formatter.escapeName(name);
                 const sql = fields.map((field) => {
-                    return sprintf('ALTER TABLE %s ALTER COLUMN %s', escapedTable, self.format('"%f" %t', field));
+                    const escapedType = self.formatType(field, '%t');
+                    const escapedField = formatter.escapeName(field.name);
+                    return sprintf('ALTER TABLE %s ALTER COLUMN %s TYPE %s', escapedTable, escapedField, escapedType);
                 }).join(';');
                 self.execute(sql, [], function (err) {
                     callback(err);
