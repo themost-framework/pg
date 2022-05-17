@@ -199,12 +199,12 @@ class PostgreSQLAdapter {
                     //log statement (optional)
                     let startTime;
                     const prepared = self.prepare(sql, values);
-                    if (process.env.NODE_ENV === 'development') {
+                    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
                         startTime = new Date().getTime();
                     }
                     //execute raw command
                     self.rawConnection.query(prepared, null, function (err, result) {
-                        if (process.env.NODE_ENV === 'development') {
+                        if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
                             TraceUtils.log(sprintf('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
                         }
                         if (err) {
@@ -564,17 +564,28 @@ class PostgreSQLAdapter {
      */
     table(name) {
         const self = this;
-        const table = name;
+        let schema = 'public';
+        let table = name;
+        const matches = /(\w+)\.(\w+)/.exec(name);
+        if (matches) {
+            schema = matches[1];
+            table = matches[2];
+        }
         return {
             /**
              * @param {function(Error,Boolean=)} callback
              */
             exists: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\'public\' AND table_type=\'BASE TABLE\' AND table_name=?',
-                    [name], function (err, result) {
-                        if (err) { callback(err); return; }
-                        callback(null, (result[0].count > 0));
+                self.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_type=\'BASE TABLE\' AND table_name=?',
+                    [
+                        schema,
+                        table
+                    ], function (err, result) {
+                        if (err) {
+                            return callback(err);
+                        }
+                        return callback(null, (result[0].count > 0));
                     });
             },
             existsAsync: function () {
@@ -592,7 +603,9 @@ class PostgreSQLAdapter {
              */
             version: function (callback) {
                 self.execute('SELECT MAX("version") AS version FROM migrations WHERE "appliesTo"=?',
-                    [name], function (err, result) {
+                    [
+                        name
+                    ], function (err, result) {
                         if (err) { callback(err); return; }
                         if (result.length === 0)
                             callback(null, '0.0');
@@ -603,7 +616,7 @@ class PostgreSQLAdapter {
             },
             versionAsync: function () {
                 return new Promise((resolve, reject) => {
-                    self.version((err, value) => {
+                    this.version((err, value) => {
                         if (err) {
                             return reject(err);
                         }
@@ -616,8 +629,11 @@ class PostgreSQLAdapter {
              */
             has_sequence: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT COUNT(*) FROM information_schema.columns WHERE table_name=? AND table_schema=\'public\' AND ("column_default" ~ \'^nextval\\((.*?)\\)$\')',
-                    [name], function (err, result) {
+                self.execute('SELECT COUNT(*) FROM information_schema.columns WHERE table_name=? AND table_schema=? AND ("column_default" ~ \'^nextval\\((.*?)\\)$\')',
+                    [
+                        table,
+                        schema
+                    ], function (err, result) {
                         if (err) { callback(err); return; }
                         callback(null, (result[0].count > 0));
                     });
@@ -629,8 +645,11 @@ class PostgreSQLAdapter {
                 callback = callback || function () { };
                 self.execute('SELECT column_name AS "columnName", ordinal_position as "ordinal", data_type as "dataType",' +
                     'character_maximum_length as "maxLength", is_nullable AS  "isNullable", column_default AS "defaultValue"' +
-                    ' FROM information_schema.columns WHERE table_name=?',
-                    [name], function (err, result) {
+                    ' FROM information_schema.columns WHERE table_name=? AND table_schema=?',
+                    [
+                        table,
+                        schema
+                    ], function (err, result) {
                         if (err) { callback(err); return; }
                         callback(null, result);
                     });
@@ -674,14 +693,15 @@ class PostgreSQLAdapter {
                     strFields += ', ';
                     strFields += sprintf('PRIMARY KEY(%s)', strPKFields);
                 }
-                const sql = sprintf('CREATE TABLE "%s" (%s)', table, strFields);
+                const escapedTable = new PostgreSQLFormatter().escapeName(name);
+                const sql = sprintf('CREATE TABLE %s (%s)', escapedTable, strFields);
                 self.execute(sql, null, function (err) {
                     callback(err);
                 });
             },
             createAsync: function (fields) {
                 return new Promise((resolve, reject) => {
-                    self.create(fields, (err, res) => {
+                    this.create(fields, (err, res) => {
                         if (err) {
                             return reject(err);
                         }
@@ -706,8 +726,9 @@ class PostgreSQLAdapter {
                     return callback();
                 }
                 // generate SQL statement
+                const escapedTable = new PostgreSQLFormatter().escapeName(name);
                 const sql = fields.map((field) => {
-                    return sprintf('ALTER TABLE "%s" ADD COLUMN %s', table, self.format('"%f" %t', field));
+                    return sprintf('ALTER TABLE %s ADD COLUMN %s', escapedTable, self.format('"%f" %t', field));
                 }).join(';');
                 self.execute(sql, [], function (err) {
                     callback(err);
@@ -715,7 +736,7 @@ class PostgreSQLAdapter {
             },
             addAsync: function (fields) {
                 return new Promise((resolve, reject) => {
-                    self.add(fields, (err, res) => {
+                    this.add(fields, (err, res) => {
                         if (err) {
                             return reject(err);
                         }
@@ -740,8 +761,9 @@ class PostgreSQLAdapter {
                     return callback();
                 }
                 //generate SQL statement
+                const escapedTable = new PostgreSQLFormatter().escapeName(name);
                 const sql = fields.map((field) => {
-                    return sprintf('ALTER TABLE "%s" ALTER COLUMN %s', table, self.format('"%f" %t', field));
+                    return sprintf('ALTER TABLE %s ALTER COLUMN %s', escapedTable, self.format('"%f" %t', field));
                 }).join(';');
                 self.execute(sql, [], function (err) {
                     callback(err);
@@ -749,7 +771,7 @@ class PostgreSQLAdapter {
             },
             changeAsync: function (fields) {
                 return new Promise((resolve, reject) => {
-                    self.add(fields, (err, res) => {
+                    this.change(fields, (err, res) => {
                         if (err) {
                             return reject(err);
                         }

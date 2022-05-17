@@ -160,12 +160,6 @@ class PostgreSQLFormatter extends SqlFormatter {
         return sprintf('(%s ~ \'%s\')', this.escape(p0), this.escape(p1, true));
     }
 
-    escapeName(name) {
-        if (typeof name === 'string')
-            return name.replace(/(\w+)/ig, this.settings.nameFormat);
-        return name;
-    }
-
     /**
      * Implements length(a) expression formatter.
      * @param p0 {*}
