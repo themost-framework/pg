@@ -121,6 +121,7 @@ describe('PostgreSQLAdapter', () => {
         columns = await db.table('Table2').columnsAsync();
         column = columns.find((col) => col.name === 'description' );
         expect(column.size).toEqual(512);
+        expect(column.nullable).toBeTruthy();
         await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table2')}`);
     });
 });

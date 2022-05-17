@@ -686,10 +686,12 @@ class PostgreSQLAdapter {
                 if (fields.length === 0) {
                     return callback(new Error('Invalid argument. Fields collection cannot be empty.'));
                 }
+                const formatter = new PostgreSQLFormatter();
                 let strFields = fields.filter((x) => {
                     return !x.oneToMany;
-                }).map((x) => {
-                    return self.format('"%f" %t', x);
+                }).map((field) => {
+                    const escapedField = formatter.escapeName(field.name);
+                    return escapedField + ' ' + self.formatType(field);
                 }).join(', ');
 
                 //add primary key constraint
@@ -735,9 +737,11 @@ class PostgreSQLAdapter {
                     return callback();
                 }
                 // generate SQL statement
+                const formatter = new PostgreSQLFormatter();
                 const escapedTable = new PostgreSQLFormatter().escapeName(name);
                 const sql = fields.map((field) => {
-                    return sprintf('ALTER TABLE %s ADD COLUMN %s', escapedTable, self.format('"%f" %t', field));
+                    const escapedField = formatter.escapeName(field.name);
+                    return sprintf('ALTER TABLE %s ADD COLUMN %s %s', escapedTable, escapedField, self.formatType(field));
                 }).join(';');
                 self.execute(sql, [], function (err) {
                     callback(err);
@@ -772,11 +776,15 @@ class PostgreSQLAdapter {
                 //generate SQL statement
                 const formatter = new PostgreSQLFormatter();
                 const escapedTable = formatter.escapeName(name);
-                const sql = fields.map((field) => {
+                let sql = fields.map((field) => {
                     const escapedType = self.formatType(field, '%t');
                     const escapedField = formatter.escapeName(field.name);
-                    return sprintf('ALTER TABLE %s ALTER COLUMN %s TYPE %s', escapedTable, escapedField, escapedType);
-                }).join(';');
+                    return sprintf('ALTER TABLE %s ALTER COLUMN %s TYPE %s;', escapedTable, escapedField, escapedType);
+                }).join('');
+                fields.forEach((field) => {
+                    const escapedField = formatter.escapeName(field.name);
+                    sql += sprintf('ALTER TABLE %s ALTER COLUMN %s %s;', escapedTable, escapedField, field.nullable ? 'DROP NOT NULL': 'SET NOT NULL');
+                });
                 self.execute(sql, [], function (err) {
                     callback(err);
                 });
