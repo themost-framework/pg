@@ -1,6 +1,6 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
-import util from 'util';
-import { SqlFormatter } from "@themost/query";
+import { SqlFormatter } from '@themost/query';
+import { sprintf } from 'sprintf-js';
 
 const SINGLE_QUOTE_ESCAPE ='\'\'';
 const DOUBLE_QUOTE_ESCAPE = '"';
@@ -80,7 +80,7 @@ class PostgreSQLFormatter extends SqlFormatter {
      */
     $indexof(p0, p1) {
 
-        return util.format('POSITION(lower(%s) IN lower(%s::text))', this.escape(p1), this.escape(p0));
+        return sprintf('POSITION(lower(%s) IN lower(%s::text))', this.escape(p1), this.escape(p0));
     }
 
     /**
@@ -93,7 +93,7 @@ class PostgreSQLFormatter extends SqlFormatter {
         //validate params
         if (Object.isNullOrUndefined(p0) || Object.isNullOrUndefined(p1))
             return '';
-        return util.format('(%s ~ \'%s\')', this.escape(p0), this.escape(p1, true));
+        return sprintf('(%s ~ \'%s\')', this.escape(p0), this.escape(p1, true));
     }
 
     /**
@@ -115,7 +115,7 @@ class PostgreSQLFormatter extends SqlFormatter {
         //validate params
         if (Object.isNullOrUndefined(p0) || Object.isNullOrUndefined(p1))
             return '';
-        return util.format('(%s ~ \'^%s\')', this.escape(p0), this.escape(p1, true));
+        return sprintf('(%s ~ \'^%s\')', this.escape(p0), this.escape(p1, true));
     }
 
     /**
@@ -127,7 +127,7 @@ class PostgreSQLFormatter extends SqlFormatter {
         //validate params
         if (Object.isNullOrUndefined(p0) || Object.isNullOrUndefined(p1))
             return '';
-        const result = util.format('(%s ~ \'%s$$\')', this.escape(p0), this.escape(p1, true));
+        const result = sprintf('(%s ~ \'%s$$\')', this.escape(p0), this.escape(p1, true));
         return result;
     }
 
@@ -140,10 +140,10 @@ class PostgreSQLFormatter extends SqlFormatter {
      */
     $substring(p0, pos, length) {
         if (length)
-            return util.format('SUBSTRING(%s FROM %s FOR %s)', this.escape(p0), pos.valueOf() + 1, length.valueOf());
+            return sprintf('SUBSTRING(%s FROM %s FOR %s)', this.escape(p0), pos.valueOf() + 1, length.valueOf());
 
         else
-            return util.format('SUBSTRING(%s FROM %s)', this.escape(p0), pos.valueOf() + 1);
+            return sprintf('SUBSTRING(%s FROM %s)', this.escape(p0), pos.valueOf() + 1);
     }
 
     /**
@@ -157,7 +157,7 @@ class PostgreSQLFormatter extends SqlFormatter {
             return '';
         if (p1.valueOf().toString().length === 0)
             return '';
-        return util.format('(%s ~ \'%s\')', this.escape(p0), this.escape(p1, true));
+        return sprintf('(%s ~ \'%s\')', this.escape(p0), this.escape(p1, true));
     }
 
     escapeName(name) {
@@ -171,18 +171,18 @@ class PostgreSQLFormatter extends SqlFormatter {
      * @param p0 {*}
      */
     $length(p0) {
-        return util.format('LENGTH(%s)', this.escape(p0));
+        return sprintf('LENGTH(%s)', this.escape(p0));
     }
 
-    $day(p0) { return util.format('DATE_PART(\'day\',%s)', this.escape(p0)); }
-    $month(p0) { return util.format('DATE_PART(\'month\',%s)', this.escape(p0)); }
-    $year(p0) { return util.format('DATE_PART(\'year\',%s)', this.escape(p0)); }
-    $hour(p0) { return util.format('HOUR_TZ(%s::timestamp with time zone)', this.escape(p0)); }
-    $minute(p0) { return util.format('DATE_PART(\'minute\',%s)', this.escape(p0)); }
-    $second(p0) { return util.format('DATE_PART(\'second\',%s)', this.escape(p0)); }
+    $day(p0) { return sprintf('DATE_PART(\'day\',%s)', this.escape(p0)); }
+    $month(p0) { return sprintf('DATE_PART(\'month\',%s)', this.escape(p0)); }
+    $year(p0) { return sprintf('DATE_PART(\'year\',%s)', this.escape(p0)); }
+    $hour(p0) { return sprintf('HOUR_TZ(%s::timestamp with time zone)', this.escape(p0)); }
+    $minute(p0) { return sprintf('DATE_PART(\'minute\',%s)', this.escape(p0)); }
+    $second(p0) { return sprintf('DATE_PART(\'second\',%s)', this.escape(p0)); }
 
     $date(p0) {
-        return util.format('CAST(%s AS DATE)', this.escape(p0));
+        return sprintf('CAST(%s AS DATE)', this.escape(p0));
     }
 }
 

@@ -1,11 +1,11 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
 import pg from 'pg';
 import async from 'async';
-import util from 'util';
 import _ from 'lodash';
-import { QueryExpression, QueryField, SqlUtils } from "@themost/query";
-import { TraceUtils } from "@themost/common";
-import { PostgreSQLFormatter } from "./PostgreSQLFormatter";
+import { QueryExpression, QueryField, SqlUtils } from '@themost/query';
+import { TraceUtils } from '@themost/common';
+import { PostgreSQLFormatter } from './PostgreSQLFormatter';
+import { sprintf } from 'sprintf-js';
 
 pg.types.setTypeParser(20, function(val) {
     return val === null ? null : parseInt(val);
@@ -44,7 +44,7 @@ class PostgreSQLAdapter {
         const self = this;
         Object.defineProperty(this, 'connectionString', {
             get: function () {
-                return util.format('postgres://%s:%s@%s:%s/%s',
+                return sprintf('postgres://%s:%s@%s:%s/%s',
                     self.options.user,
                     self.options.password,
                     self.options.host,
@@ -78,7 +78,7 @@ class PostgreSQLAdapter {
                 return callback(err);
             }
             if (process.env.NODE_ENV === 'development') {
-                TraceUtils.log(util.format('SQL (Execution Time:%sms): Connect', (new Date()).getTime() - startTime));
+                TraceUtils.log(sprintf('SQL (Execution Time:%sms): Connect', (new Date()).getTime() - startTime));
             }
             //and return
             callback(err);
@@ -210,11 +210,11 @@ class PostgreSQLAdapter {
                     //execute raw command
                     self.rawConnection.query(prepared, null, function (err, result) {
                         if (process.env.NODE_ENV === 'development') {
-                            TraceUtils.log(util.format('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
+                            TraceUtils.log(sprintf('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
                         }
                         if (err) {
                             //log sql
-                            TraceUtils.log(util.format('SQL Error:%s', prepared));
+                            TraceUtils.log(sprintf('SQL Error:%s', prepared));
                             callback(err);
                         }
                         else {
@@ -418,7 +418,7 @@ class PostgreSQLAdapter {
                 return 'SERIAL';
             case 'Currency':
             case 'Decimal':
-                s = util.format('decimal(%s,%s)', (size > 0 ? size : 19), (scale > 0 ? scale : 4));
+                s = sprintf('decimal(%s,%s)', (size > 0 ? size : 19), (scale > 0 ? scale : 4));
                 break;
             case 'Date':
                 s = 'date';
@@ -433,32 +433,32 @@ class PostgreSQLAdapter {
                 s = 'int';
                 break;
             case 'Duration':
-                s = size > 0 ? util.format('varchar(%s)', size) : 'varchar(48)';
+                s = size > 0 ? sprintf('varchar(%s)', size) : 'varchar(48)';
                 break;
             case 'URL':
                 if (size > 0)
-                    s = util.format('varchar(%s)', size);
+                    s = sprintf('varchar(%s)', size);
 
                 else
                     s = 'varchar';
                 break;
             case 'Text':
                 if (size > 0)
-                    s = util.format('varchar(%s)', size);
+                    s = sprintf('varchar(%s)', size);
 
                 else
                     s = 'varchar';
                 break;
             case 'Note':
                 if (size > 0)
-                    s = util.format('varchar(%s)', size);
+                    s = sprintf('varchar(%s)', size);
 
                 else
                     s = 'text';
                 break;
             case 'Image':
             case 'Binary':
-                s = size > 0 ? util.format('bytea(%s)', size) : 'bytea';
+                s = size > 0 ? sprintf('bytea(%s)', size) : 'bytea';
                 break;
             case 'Guid':
                 s = 'uuid';
@@ -510,7 +510,7 @@ class PostgreSQLAdapter {
                     function (arg, cb) {
                         if (arg === 0) { cb(null, 0); return; }
                         //format query
-                        const sql = util.format("DROP VIEW \"%s\"", name);
+                        const sql = sprintf('DROP VIEW "%s"', name);
                         self.execute(sql, null, function (err) {
                             if (err) { throw err; }
                             cb(null, 0);
@@ -519,7 +519,7 @@ class PostgreSQLAdapter {
                     function (arg, cb) {
                         //format query
                         const formatter = new PostgreSQLFormatter();
-                        const sql = util.format("CREATE VIEW \"%s\" AS %s", name, formatter.format(query));
+                        const sql = sprintf('CREATE VIEW "%s" AS %s', name, formatter.format(query));
                         self.execute(sql, null, function (err) {
                             if (err) { throw err; }
                             cb(null, 0);
@@ -629,7 +629,7 @@ class PostgreSQLAdapter {
         };
 
         if (migration.appliesTo === null)
-            throw new Error("Model name is undefined");
+            throw new Error('Model name is undefined');
         self.open(function (err) {
             if (err) {
                 callback.call(self, err);
@@ -704,7 +704,7 @@ class PostgreSQLAdapter {
                                 return format('"%f" %t', x);
                             }).join(', ');
                             const key = _.find(migration.add, (x) => { return x.primary; });
-                            const sql = util.format('CREATE TABLE "%s" (%s, PRIMARY KEY("%s"))', migration.appliesTo, strFields, key.name);
+                            const sql = sprintf('CREATE TABLE "%s" (%s, PRIMARY KEY("%s"))', migration.appliesTo, strFields, key.name);
                             self.execute(sql, null, function (err) {
                                 if (err) { return cb(err); }
                                 return cb(null, 1);
@@ -726,12 +726,12 @@ class PostgreSQLAdapter {
                                     fname = migration.remove[i].name;
                                     column = findColumnFunc(fname);
                                     if (typeof column !== 'undefined') {
-                                        let k = 1, deletedColumnName = util.format('xx%s1_%s', k.toString(), column.columnName);
+                                        let k = 1, deletedColumnName = sprintf('xx%s1_%s', k.toString(), column.columnName);
                                         while (typeof findColumnFunc(deletedColumnName) !== 'undefined') {
                                             k += 1;
-                                            deletedColumnName = util.format('xx%s_%s', k.toString(), column.columnName);
+                                            deletedColumnName = sprintf('xx%s_%s', k.toString(), column.columnName);
                                         }
-                                        expressions.push(util.format('ALTER TABLE "%s" RENAME COLUMN "%s" TO %s', migration.appliesTo, column.columnName, deletedColumnName));
+                                        expressions.push(sprintf('ALTER TABLE "%s" RENAME COLUMN "%s" TO %s', migration.appliesTo, column.columnName, deletedColumnName));
                                     }
                                 }
                             }
@@ -750,15 +750,15 @@ class PostgreSQLAdapter {
                                         newSize = migration.add[i].size;
                                         //add expression for modifying column (size)
                                         if ((typeof newSize !== 'undefined') && (originalSize !== newSize)) {
-                                            expressions.push(util.format('UPDATE pg_attribute SET atttypmod = %s+4 WHERE attrelid = \'"%s"\'::regclass AND attname = \'%s\';', newSize, migration.appliesTo, fieldName));
+                                            expressions.push(sprintf('UPDATE pg_attribute SET atttypmod = %s+4 WHERE attrelid = \'"%s"\'::regclass AND attname = \'%s\';', newSize, migration.appliesTo, fieldName));
                                         }
                                         //update nullable attribute
                                         nullable = (typeof migration.add[i].nullable !== 'undefined') ? migration.add[i].nullable : true;
-                                        expressions.push(util.format('ALTER TABLE "%s" ALTER COLUMN "%s" %s', migration.appliesTo, fieldName, (nullable ? 'DROP NOT NULL' : 'SET NOT NULL')));
+                                        expressions.push(sprintf('ALTER TABLE "%s" ALTER COLUMN "%s" %s', migration.appliesTo, fieldName, (nullable ? 'DROP NOT NULL' : 'SET NOT NULL')));
                                     }
                                     else {
                                         //add expression for adding column
-                                        expressions.push(util.format('ALTER TABLE "%s" ADD COLUMN "%s" %s', migration.appliesTo, fieldName, PostgreSQLAdapter.formatType(migration.add[i])));
+                                        expressions.push(sprintf('ALTER TABLE "%s" ADD COLUMN "%s" %s', migration.appliesTo, fieldName, PostgreSQLAdapter.formatType(migration.add[i])));
                                     }
                                 }
                             }
@@ -770,7 +770,7 @@ class PostgreSQLAdapter {
                                     column = findColumnFunc(change);
                                     if (typeof column !== 'undefined') {
                                         //important note: Alter column operation is not supported for column types
-                                        expressions.push(util.format('ALTER TABLE "%s" ALTER COLUMN "%s" TYPE %s', migration.appliesTo, migration.add[i].name, PostgreSQLAdapter.formatType(migration.change[i])));
+                                        expressions.push(sprintf('ALTER TABLE "%s" ALTER COLUMN "%s" TYPE %s', migration.appliesTo, migration.add[i].name, PostgreSQLAdapter.formatType(migration.change[i])));
                                     }
                                 }
                             }

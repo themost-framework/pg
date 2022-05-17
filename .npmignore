@@ -3,6 +3,10 @@ spec
 jest.config.js
 babel.config.js
 
+# eslint
+.eslintrc
+.eslintignore
+
 # gitpod
 .gitpod.dockerfile
 .gitpod.yml
