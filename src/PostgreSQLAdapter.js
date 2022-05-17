@@ -407,22 +407,6 @@ class PostgreSQLAdapter {
     }
 
     /**
-     * Formats an object based on the format string provided. Valid formats are:
-     * %t : Formats a field and returns field type definition
-     * %f : Formats a field and returns field name
-     * @param format {string}
-     * @param obj {*}
-     */
-     format(format, obj) {
-        let result = format;
-        if (/%t/.test(format))
-            result = result.replace(/%t/g, this.formatType(obj));
-        if (/%f/.test(format))
-            result = result.replace(/%f/g, obj.name);
-        return result;
-    }
-
-    /**
      *
      * @param {*|{type:string, size:number, nullable:boolean}} field
      * @param {string=} format
@@ -662,8 +646,8 @@ class PostgreSQLAdapter {
                 //add primary key constraint
                 const strPKFields = fields.filter((x) => {
                     return (x.primary === true || x.primary === 1);
-                }).map((x) => {
-                    return self.format('"%f"', x);
+                }).map((field) => {
+                    return formatter.escapeName(field.name);
                 }).join(', ');
                 if (strPKFields.length > 0) {
                     strFields += ', ';
@@ -1094,6 +1078,213 @@ class PostgreSQLAdapter {
             }
         });
     }
+
+    /**
+     * Table indexes helper
+     * @param {string} name 
+     */
+     indexes(name) {
+        const self = this;
+        let schema = 'public';
+        let table = name;
+        const matches = /(\w+)\.(\w+)/.exec(name);
+        if (matches) {
+            //get schema owner
+            schema = matches[1];
+            //get table name
+            table = matches[2];
+        }
+        const formatter = new PostgreSQLFormatter();
+        return {
+            list: function (callback) {
+                const this1 = this;
+                if (Object.prototype.hasOwnProperty.call(this1, '_indexes')) {
+                    return callback(null, this1._indexes);
+                }
+                const sqlIndexes = 'SELECT indexname as "name" FROM pg_indexes WHERE schemaname=? AND tablename=?';
+                const sqlIndexColumns = `
+                    with ind_cols as (
+                    select
+                        n.nspname as "schema_name",
+                        t.relname as "table_name",
+                        i.relname as "index_name",
+                        a.attname as "column_name",
+                        1 + array_position(ix.indkey, a.attnum) as column_position
+                    from
+                        pg_catalog.pg_class t
+                    join pg_catalog.pg_attribute a on t.oid = a.attrelid 
+                    join pg_catalog.pg_index ix on t.oid = ix.indrelid
+                    join pg_catalog.pg_class i on a.attnum = any(ix.indkey)
+                    and i.oid = ix.indexrelid
+                    join pg_catalog.pg_namespace n on n.oid = t.relnamespace
+                    where t.relkind = 'r'
+                    order by
+                        t.relname,
+                        i.relname,
+                        array_position(ix.indkey, a.attnum)
+                    )
+                    select * 
+                    from ind_cols
+                    where schema_name = ?
+                    and table_name  = ?
+                    order by schema_name, table_name
+                `;
+                    (async () => {
+                        const results = [];
+                        results.push(await self.executeAsync(sqlIndexes, [
+                            schema,
+                            table
+                        ]));
+                        results.push(await self.executeAsync(sqlIndexColumns, [
+                            schema,
+                            table
+                        ]));
+                        return results;
+                    })().then((results) => {
+                    const indexes = results[0].map(function (index) {
+                        return {
+                            name: index.name,
+                            columns: results[1].filter((y) => index.name === y.index_name).map((y) => y.column_name)
+                        };
+                    });
+                    this1._indexes = indexes;
+                    return callback(null, indexes);
+                }).catch((err) => {
+                    return callback(err);
+                });
+            },
+            listAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.list((err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * @param {string} indexName
+             * @param {Array|string} columns
+             * @param {Function} callback
+             */
+            create: function (indexName, columns, callback) {
+                const cols = [];
+                if (typeof columns === 'string') {
+                    cols.push(columns);
+                }
+                else if (Array.isArray(columns)) {
+                    cols.push.apply(cols, columns);
+                }
+                else {
+                    return callback(new Error('Invalid parameter. Columns parameter must be a string or an array of strings.'));
+                }
+                const thisArg = this;
+                thisArg.list(function (err, indexes) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    const findIndex = indexes.find((x) => {
+                        return x.name === indexName;
+                    });
+                    //format create index SQL statement
+                    const escapeColumns = cols.map(function (x) {
+                        return formatter.escapeName(x);
+                    }).join(',');
+                    const sqlCreateIndex = `CREATE INDEX ${formatter.escapeName(indexName)} ON ${formatter.escapeName(name)} (${escapeColumns})`;
+                    if (findIndex == null) {
+                        self.execute(sqlCreateIndex, [], (err) => {
+                            if (err) {
+                                return callback(err);
+                            }
+                            return callback(null, 1);
+                        });
+                    }
+                    else {
+                        let nCols = cols.length;
+                        //enumerate existing columns
+                        findIndex.columns.forEach(function (x) {
+                            if (cols.indexOf(x) >= 0) {
+                                //column exists in index
+                                nCols -= 1;
+                            }
+                        });
+                        if (nCols > 0) {
+                            //drop index
+                            thisArg.drop(name, function (err) {
+                                if (err) {
+                                    return callback(err);
+                                }
+                                //and create it
+                                return self.execute(sqlCreateIndex, [], (err) => {
+                                    if (err) {
+                                        return callback(err);
+                                    }
+                                    return callback(null, 1);
+                                });
+                            });
+                        }
+                        else {
+                            //do nothing
+                            return callback(null, 0);
+                        }
+                    }
+                });
+            },
+            /**
+             * @param {string} name
+             * @param {Array|string} columns
+             */
+            createAsync: function (name, columns) {
+                return new Promise((resolve, reject) => {
+                    this.create(name, columns, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            drop: function (indexName, callback) {
+                const thisArg = this;
+                if (typeof name !== 'string') {
+                    return callback(new Error('Name must be a valid string.'));
+                }
+                self.execute('SELECT indexname as "name" FROM pg_indexes WHERE schemaname=? AND tablename=? AND indexname=?', [
+                    schema,
+                    table,
+                    indexName
+                ], function (err, result) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    if (result.length === 0) {
+                        return callback(null, 0);
+                    }
+                    self.execute(`DROP INDEX ${formatter.escapeName(indexName)}`, null, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        // cleanup indexes
+                        delete thisArg._indexes;
+                        // and return
+                        return callback(null, 1);
+                    });
+                });
+            },
+            dropAsync: function (name) {
+                return new Promise((resolve, reject) => {
+                    this.drop(name, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            }
+        };
+    }
+
 }
 
 export {

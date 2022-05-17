@@ -127,7 +127,7 @@ describe('PostgreSQLAdapter', () => {
     });
 
 
-    fit('should create view', async () => {
+    it('should create view', async () => {
         let exists = await db.table('Table1').existsAsync();
         expect(exists).toBeFalsy();
         await db.table('Table1').createAsync([
@@ -166,6 +166,57 @@ describe('PostgreSQLAdapter', () => {
 
         exists = await db.view('View1').existsAsync();
         expect(exists).toBeFalsy();
+        
+    });
+
+
+    fit('should create index', async () => {
+        let exists = await db.table('Table1').existsAsync();
+        expect(exists).toBeFalsy();
+        await db.table('Table1').createAsync([
+            {
+                name: 'id',
+                type: 'Counter',
+                primary: true,
+                nullable: false
+            },
+            {
+                name: 'name',
+                type: 'Text',
+                size: 255,
+                nullable: false
+            },
+            {
+                name: 'description',
+                type: 'Text',
+                size: 255,
+                nullable: true
+            }
+        ]);
+        exists = await db.table('Table1').existsAsync();
+        expect(exists).toBeTruthy();
+
+        let list = await db.indexes('Table1').listAsync();
+        expect(list).toBeInstanceOf(Array);
+        exists = list.findIndex((index) => index.name === 'idx_name') < 0;
+
+        await db.indexes('Table1').createAsync('idx_name', [
+            'name'
+        ]);
+
+        list = await db.indexes('Table1').listAsync();
+        expect(list).toBeInstanceOf(Array);
+        exists = list.findIndex((index) => index.name === 'idx_name') >= 0;
+        expect(exists).toBeTruthy();
+        
+        await db.indexes('Table1').dropAsync('idx_name');
+
+        list = await db.indexes('Table1').listAsync();
+        expect(list).toBeInstanceOf(Array);
+        exists = list.findIndex((index) => index.name === 'idx_name') >= 0;
+        expect(exists).toBeFalsy();
+
+        await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
         
     });
 

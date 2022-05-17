@@ -52,7 +52,6 @@ export declare interface PostgreSQLAdapterMigration {
 }
 
 export declare class PostgreSQLAdapter {
-    static formatType(field: any): string;
     constructor(options?: any);
     formatType(field: any): string;
     open(callback: (err: Error) => void): void;
