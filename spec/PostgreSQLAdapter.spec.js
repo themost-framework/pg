@@ -1,5 +1,6 @@
 import { PostgreSQLAdapter } from '../src/PostgreSQLAdapter';
 import { PostgreSQLFormatter } from '../src/PostgreSQLFormatter';
+import { QueryExpression } from '@themost/query';
 
 const testConnection = {
     host: process.env.POSTGRES_HOST,
@@ -124,4 +125,48 @@ describe('PostgreSQLAdapter', () => {
         expect(column.nullable).toBeTruthy();
         await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table2')}`);
     });
+
+
+    fit('should create view', async () => {
+        let exists = await db.table('Table1').existsAsync();
+        expect(exists).toBeFalsy();
+        await db.table('Table1').createAsync([
+            {
+                name: 'id',
+                type: 'Counter',
+                primary: true,
+                nullable: false
+            },
+            {
+                name: 'name',
+                type: 'Text',
+                size: 255,
+                nullable: false
+            },
+            {
+                name: 'description',
+                type: 'Text',
+                size: 255,
+                nullable: true
+            }
+        ]);
+        exists = await db.table('Table1').existsAsync();
+        expect(exists).toBeTruthy();
+
+        exists = await db.view('View1').existsAsync();
+        expect(exists).toBeFalsy();
+
+        const query = new QueryExpression().select('id', 'name', 'description').from('Table1');
+        await db.view('View1').createAsync(query);
+
+        exists = await db.view('View1').existsAsync();
+        expect(exists).toBeTruthy();
+        
+        await db.view('View1').dropAsync();
+
+        exists = await db.view('View1').existsAsync();
+        expect(exists).toBeFalsy();
+        
+    });
+
 });

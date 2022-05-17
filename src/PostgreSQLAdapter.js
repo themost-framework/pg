@@ -314,7 +314,26 @@ class PostgreSQLAdapter {
                 }
             }
         });
-
+    }
+    /**
+     * Begins a data transaction and executes the given function
+     * @param func {Function}
+     */
+     executeInTransactionAsync(func) {
+        return new Promise((resolve, reject) => {
+            return this.executeInTransaction((callback) => {
+                return func.call(this).then(res => {
+                    return callback(null, res);
+                }).catch(err => {
+                    return callback(err);
+                });
+            }, (err, res) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(res);
+            });
+        });
     }
 
     /**
@@ -503,67 +522,13 @@ class PostgreSQLAdapter {
      * @param query {QueryExpression}
      */
     createView(name, query, callback) {
-        const self = this;
-        //open database
-        self.open(function (err) {
-            if (err) {
-                callback.call(self, err);
-                return;
-            }
-            //begin transaction
-            self.executeInTransaction(function (tr) {
-                async.waterfall([
-                    function (cb) {
-                        self.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\'public\' AND table_type=\'VIEW\' AND table_name=?', [name], function (err, result) {
-                            if (err) { throw err; }
-                            if (result.length === 0)
-                                return cb(null, 0);
-                            cb(null, result[0].count);
-                        });
-                    },
-                    function (arg, cb) {
-                        if (arg === 0) { cb(null, 0); return; }
-                        //format query
-                        const sql = sprintf('DROP VIEW "%s"', name);
-                        self.execute(sql, null, function (err) {
-                            if (err) { throw err; }
-                            cb(null, 0);
-                        });
-                    },
-                    function (arg, cb) {
-                        //format query
-                        const formatter = new PostgreSQLFormatter();
-                        const sql = sprintf('CREATE VIEW "%s" AS %s', name, formatter.format(query));
-                        self.execute(sql, null, function (err) {
-                            if (err) { throw err; }
-                            cb(null, 0);
-                        });
-                    }
-                ], function (err) {
-                    if (err) { tr(err); return; }
-                    tr(null);
-                });
-            }, function (err) {
-                callback(err);
-            });
+        return this.view(name).create(query, (err) => {
+            return callback(err);
         });
-
     }
 
     /**
-     * @class DataModelMigration
-     * @property {string} name
-     * @property {string} description
-     * @property {string} model
-     * @property {string} appliesTo
-     * @property {string} version
-     * @property {array} add
-     * @property {array} remove
-     * @property {array} change
-     */
-    /**
      * @param {string} name
-     * @returns {{exists: Function}}
      */
     table(name) {
         const self = this;
@@ -799,6 +764,130 @@ class PostgreSQLAdapter {
                     });
                 });
             },
+        };
+    }
+
+    /**
+     * Initializes database view helper.
+     * @param {string} name - A string that represents the view name
+     * @returns {*}
+     */
+     view(name) {
+        const self = this;
+        let schema = 'public';
+        let view = name;
+        const matches = /(\w+)\.(\w+)/.exec(name);
+        if (matches) {
+            //get schema owner
+            schema = matches[1];
+            //get table name
+            view = matches[2];
+        }
+        return {
+            /**
+             * @param {Function} callback
+             */
+            exists: function (callback) {
+                callback = callback || function () { };
+                self.execute('SELECT COUNT(*) AS "count" FROM "information_schema"."tables" WHERE "table_schema"=? AND "table_type"=\'VIEW\' AND "table_name"=?',
+                [
+                    schema,
+                    view
+                ], function (err, result) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, result[0].count === 1);
+                });
+            },
+            existsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.exists((err, value) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(value);
+                    });
+                });
+            },
+            /**
+             * @param {Function} callback
+             */
+            drop: function (callback) {
+                callback = callback || function () { };
+                self.open(function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    self.execute('SELECT COUNT(*) AS "count" FROM "information_schema"."tables" WHERE "table_schema"=? AND "table_type"=\'VIEW\' AND "table_name"=?',
+                    [
+                        schema,
+                        view
+                    ], function (err, result) {
+                        if (err) {
+                            return callback(err);
+                        }
+                        const exists = (result[0].count > 0);
+                        if (exists) {
+                            const formatter = new PostgreSQLFormatter();
+                            const sql = sprintf('DROP VIEW %s', formatter.escapeName(name));
+                            return self.execute(sql, [], function (err) {
+                                if (err) {
+                                    return callback(err);
+                                }
+                                return callback();
+                            });
+                        }
+                        return callback();
+                    });
+                });
+            },
+            dropAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.drop((err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve();
+                    });
+                });
+            },
+            /**
+             * @param {QueryExpression|*} q
+             * @param {Function} callback
+             */
+            create: function (q, callback) {
+                const thisArg = this;
+                self.executeInTransaction(function (transcactionCallback) {
+                    return thisArg.drop((err) => {
+                        if (err) {
+                            return transcactionCallback(err);
+                        }
+                        try {
+                            const formatter = new PostgreSQLFormatter();
+                            const sql = sprintf('CREATE VIEW %s AS ', formatter.escapeName(name)) + formatter.format(q);
+                            return self.execute(sql, [], (err) => {
+                                return transcactionCallback(err);
+                            });
+                        }
+                        catch (error) {
+                            return transcactionCallback(error);
+                        }
+                    });
+                }, (err) => {
+                    return callback(err);
+                });
+            },
+            createAsync: function (q) {
+                return new Promise((resolve, reject) => {
+                    this.create(q, (err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve();
+                    });
+                });
+            }
         };
     }
 
