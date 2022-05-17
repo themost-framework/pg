@@ -15,11 +15,6 @@ pg.types.setTypeParser(1700, function(val) {
     return val === null ? null : parseFloat(val);
 });
 
-/**
- * @class
- * @augments {DataAdapter}
- */
-
 
 class PostgreSQLAdapter {
     /**
@@ -393,12 +388,28 @@ class PostgreSQLAdapter {
     }
 
     /**
+     * Formats an object based on the format string provided. Valid formats are:
+     * %t : Formats a field and returns field type definition
+     * %f : Formats a field and returns field name
+     * @param format {string}
+     * @param obj {*}
+     */
+     format(format, obj) {
+        let result = format;
+        if (/%t/.test(format))
+            result = result.replace(/%t/g, this.formatType(obj));
+        if (/%f/.test(format))
+            result = result.replace(/%f/g, obj.name);
+        return result;
+    }
+
+    /**
      *
      * @param {*|{type:string, size:number, nullable:boolean}} field
      * @param {string=} format
      * @returns {string}
      */
-    static formatType(field, format) {
+    formatType(field, format) {
         const size = parseInt(field.size);
         const scale = parseInt(field.scale);
         let s = 'varchar(512) NULL';
@@ -553,6 +564,7 @@ class PostgreSQLAdapter {
      */
     table(name) {
         const self = this;
+        const table = name;
         return {
             /**
              * @param {function(Error,Boolean=)} callback
@@ -564,6 +576,16 @@ class PostgreSQLAdapter {
                         if (err) { callback(err); return; }
                         callback(null, (result[0].count > 0));
                     });
+            },
+            existsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.exists((err, value) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(value);
+                    });
+                });
             },
             /**
              * @param {function(Error,string=)} callback
@@ -578,6 +600,16 @@ class PostgreSQLAdapter {
                         else
                             callback(null, result[0].version || '0.0');
                     });
+            },
+            versionAsync: function () {
+                return new Promise((resolve, reject) => {
+                    self.version((err, value) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(value);
+                    });
+                });
             },
             /**
              * @param {function(Error,Boolean=)} callback
@@ -602,7 +634,129 @@ class PostgreSQLAdapter {
                         if (err) { callback(err); return; }
                         callback(null, result);
                     });
-            }
+            },
+            columnsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    self.columns((err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * @param {Array<*>} fields
+             * @param callback
+             */
+             create: function (fields, callback) {
+                callback = callback || function () { };
+                fields = fields || [];
+                if (!Array.isArray(fields)) {
+                    return callback(new Error('Invalid argument type. Expected Array.'));
+                }
+                if (fields.length === 0) {
+                    return callback(new Error('Invalid argument. Fields collection cannot be empty.'));
+                }
+                let strFields = fields.filter((x) => {
+                    return !x.oneToMany;
+                }).map((x) => {
+                    return self.format('"%f" %t', x);
+                }).join(', ');
+
+                //add primary key constraint
+                const strPKFields = fields.filter((x) => {
+                    return (x.primary === true || x.primary === 1);
+                }).map((x) => {
+                    return self.format('"%f"', x);
+                }).join(', ');
+                if (strPKFields.length > 0) {
+                    strFields += ', ';
+                    strFields += sprintf('PRIMARY KEY(%s)', strPKFields);
+                }
+                const sql = sprintf('CREATE TABLE "%s" (%s)', table, strFields);
+                self.execute(sql, null, function (err) {
+                    callback(err);
+                });
+            },
+            createAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    self.create(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * Alters the table by adding an array of fields
+             * @param {Array<*>} fields
+             * @param callback
+             */
+             add: function (fields, callback) {
+                callback = callback || function () { };
+                fields = fields || [];
+                if (Array.isArray(fields) === false) {
+                    //invalid argument exception
+                    return callback(new Error('Invalid argument type. Expected Array.'));
+                }
+                if (fields.length === 0) {
+                    // do nothing
+                    return callback();
+                }
+                // generate SQL statement
+                const sql = fields.map((field) => {
+                    return sprintf('ALTER TABLE "%s" ADD COLUMN %s', table, self.format('"%f" %t', field));
+                }).join(';');
+                self.execute(sql, [], function (err) {
+                    callback(err);
+                });
+            },
+            addAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    self.add(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * Alters the table by modifying an array of fields
+             * @param {Array<*>} fields
+             * @param callback
+             */
+             change: function (fields, callback) {
+                callback = callback || function () { };
+                fields = fields || [];
+                if (Array.isArray(fields) === false) {
+                    //invalid argument exception
+                    return callback(new Error('Invalid argument type. Expected Array.'));
+                }
+                if (fields.length === 0) {
+                    //do nothing
+                    return callback();
+                }
+                //generate SQL statement
+                const sql = fields.map((field) => {
+                    return sprintf('ALTER TABLE "%s" ALTER COLUMN %s', table, self.format('"%f" %t', field));
+                }).join(';');
+                self.execute(sql, [], function (err) {
+                    callback(err);
+                });
+            },
+            changeAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    self.add(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
         };
     }
 
@@ -622,7 +776,7 @@ class PostgreSQLAdapter {
         const format = function (format, obj) {
             let result = format;
             if (/%t/.test(format))
-                result = result.replace(/%t/g, PostgreSQLAdapter.formatType(obj));
+                result = result.replace(/%t/g, self.formatType(obj));
             if (/%f/.test(format))
                 result = result.replace(/%f/g, obj.name);
             return result;
@@ -758,7 +912,7 @@ class PostgreSQLAdapter {
                                     }
                                     else {
                                         //add expression for adding column
-                                        expressions.push(sprintf('ALTER TABLE "%s" ADD COLUMN "%s" %s', migration.appliesTo, fieldName, PostgreSQLAdapter.formatType(migration.add[i])));
+                                        expressions.push(sprintf('ALTER TABLE "%s" ADD COLUMN "%s" %s', migration.appliesTo, fieldName, self.formatType(migration.add[i])));
                                     }
                                 }
                             }
@@ -770,7 +924,7 @@ class PostgreSQLAdapter {
                                     column = findColumnFunc(change);
                                     if (typeof column !== 'undefined') {
                                         //important note: Alter column operation is not supported for column types
-                                        expressions.push(sprintf('ALTER TABLE "%s" ALTER COLUMN "%s" TYPE %s', migration.appliesTo, migration.add[i].name, PostgreSQLAdapter.formatType(migration.change[i])));
+                                        expressions.push(sprintf('ALTER TABLE "%s" ALTER COLUMN "%s" TYPE %s', migration.appliesTo, migration.add[i].name, self.formatType(migration.change[i])));
                                     }
                                 }
                             }
