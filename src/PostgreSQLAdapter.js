@@ -1,11 +1,9 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
 import pg from 'pg';
-import async from 'async';
-import util from 'util';
-import _ from 'lodash';
-import { QueryExpression, QueryField, SqlUtils } from "@themost/query";
-import { TraceUtils } from "@themost/common";
-import { PostgreSQLFormatter } from "./PostgreSQLFormatter";
+import { QueryExpression, QueryField, SqlUtils } from '@themost/query';
+import { TraceUtils } from '@themost/common';
+import { PostgreSQLFormatter } from './PostgreSQLFormatter';
+import { sprintf } from 'sprintf-js';
 
 pg.types.setTypeParser(20, function(val) {
     return val === null ? null : parseInt(val);
@@ -14,11 +12,6 @@ pg.types.setTypeParser(20, function(val) {
 pg.types.setTypeParser(1700, function(val) {
     return val === null ? null : parseFloat(val);
 });
-
-/**
- * @class
- * @augments {DataAdapter}
- */
 
 
 class PostgreSQLAdapter {
@@ -44,7 +37,7 @@ class PostgreSQLAdapter {
         const self = this;
         Object.defineProperty(this, 'connectionString', {
             get: function () {
-                return util.format('postgres://%s:%s@%s:%s/%s',
+                return sprintf('postgres://%s:%s@%s:%s/%s',
                     self.options.user,
                     self.options.password,
                     self.options.host,
@@ -78,7 +71,7 @@ class PostgreSQLAdapter {
                 return callback(err);
             }
             if (process.env.NODE_ENV === 'development') {
-                TraceUtils.log(util.format('SQL (Execution Time:%sms): Connect', (new Date()).getTime() - startTime));
+                TraceUtils.log(sprintf('SQL (Execution Time:%sms): Connect', (new Date()).getTime() - startTime));
             }
             //and return
             callback(err);
@@ -145,7 +138,8 @@ class PostgreSQLAdapter {
      * @param {function(Error=)} callback
      */
     close(callback) {
-        this.disconnect(callback);
+        callback = callback || function () { };
+        return this.disconnect(callback);
     }
 
     /**
@@ -204,17 +198,17 @@ class PostgreSQLAdapter {
                     //log statement (optional)
                     let startTime;
                     const prepared = self.prepare(sql, values);
-                    if (process.env.NODE_ENV === 'development') {
+                    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
                         startTime = new Date().getTime();
                     }
                     //execute raw command
                     self.rawConnection.query(prepared, null, function (err, result) {
-                        if (process.env.NODE_ENV === 'development') {
-                            TraceUtils.log(util.format('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
+                        if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+                            TraceUtils.log(sprintf('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
                         }
                         if (err) {
                             //log sql
-                            TraceUtils.log(util.format('SQL Error:%s', prepared));
+                            TraceUtils.log(sprintf('SQL Error:%s', prepared));
                             callback(err);
                         }
                         else {
@@ -319,7 +313,26 @@ class PostgreSQLAdapter {
                 }
             }
         });
-
+    }
+    /**
+     * Begins a data transaction and executes the given function
+     * @param func {Function}
+     */
+     executeInTransactionAsync(func) {
+        return new Promise((resolve, reject) => {
+            return this.executeInTransaction((callback) => {
+                return func.call(this).then(res => {
+                    return callback(null, res);
+                }).catch(err => {
+                    return callback(err);
+                });
+            }, (err, res) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(res);
+            });
+        });
     }
 
     /**
@@ -398,7 +411,7 @@ class PostgreSQLAdapter {
      * @param {string=} format
      * @returns {string}
      */
-    static formatType(field, format) {
+    formatType(field, format) {
         const size = parseInt(field.size);
         const scale = parseInt(field.scale);
         let s = 'varchar(512) NULL';
@@ -418,7 +431,7 @@ class PostgreSQLAdapter {
                 return 'SERIAL';
             case 'Currency':
             case 'Decimal':
-                s = util.format('decimal(%s,%s)', (size > 0 ? size : 19), (scale > 0 ? scale : 4));
+                s = sprintf('decimal(%s,%s)', (size > 0 ? size : 19), (scale > 0 ? scale : 4));
                 break;
             case 'Date':
                 s = 'date';
@@ -433,32 +446,32 @@ class PostgreSQLAdapter {
                 s = 'int';
                 break;
             case 'Duration':
-                s = size > 0 ? util.format('varchar(%s)', size) : 'varchar(48)';
+                s = size > 0 ? sprintf('varchar(%s)', size) : 'varchar(48)';
                 break;
             case 'URL':
                 if (size > 0)
-                    s = util.format('varchar(%s)', size);
+                    s = sprintf('varchar(%s)', size);
 
                 else
                     s = 'varchar';
                 break;
             case 'Text':
                 if (size > 0)
-                    s = util.format('varchar(%s)', size);
+                    s = sprintf('varchar(%s)', size);
 
                 else
                     s = 'varchar';
                 break;
             case 'Note':
                 if (size > 0)
-                    s = util.format('varchar(%s)', size);
+                    s = sprintf('varchar(%s)', size);
 
                 else
                     s = 'text';
                 break;
             case 'Image':
             case 'Binary':
-                s = size > 0 ? util.format('bytea(%s)', size) : 'bytea';
+                s = size > 0 ? sprintf('bytea(%s)', size) : 'bytea';
                 break;
             case 'Guid':
                 s = 'uuid';
@@ -470,11 +483,14 @@ class PostgreSQLAdapter {
                 s = 'integer';
                 break;
         }
-        if (format === 'alter')
+        if (format === '%t') {
+            return s;
+        }
+        if (format === 'alter') {
             s += (typeof field.nullable === 'undefined') ? ' DROP NOT NULL' : (field.nullable ? ' DROP NOT NULL' : ' SET NOT NULL');
-
-        else
+        } else {
             s += (typeof field.nullable === 'undefined') ? ' NULL' : (field.nullable ? ' NULL' : ' NOT NULL');
+        }
         return s;
     }
 
@@ -489,88 +505,58 @@ class PostgreSQLAdapter {
      * @param query {QueryExpression}
      */
     createView(name, query, callback) {
-        const self = this;
-        //open database
-        self.open(function (err) {
-            if (err) {
-                callback.call(self, err);
-                return;
-            }
-            //begin transaction
-            self.executeInTransaction(function (tr) {
-                async.waterfall([
-                    function (cb) {
-                        self.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\'public\' AND table_type=\'VIEW\' AND table_name=?', [name], function (err, result) {
-                            if (err) { throw err; }
-                            if (result.length === 0)
-                                return cb(null, 0);
-                            cb(null, result[0].count);
-                        });
-                    },
-                    function (arg, cb) {
-                        if (arg === 0) { cb(null, 0); return; }
-                        //format query
-                        const sql = util.format("DROP VIEW \"%s\"", name);
-                        self.execute(sql, null, function (err) {
-                            if (err) { throw err; }
-                            cb(null, 0);
-                        });
-                    },
-                    function (arg, cb) {
-                        //format query
-                        const formatter = new PostgreSQLFormatter();
-                        const sql = util.format("CREATE VIEW \"%s\" AS %s", name, formatter.format(query));
-                        self.execute(sql, null, function (err) {
-                            if (err) { throw err; }
-                            cb(null, 0);
-                        });
-                    }
-                ], function (err) {
-                    if (err) { tr(err); return; }
-                    tr(null);
-                });
-            }, function (err) {
-                callback(err);
-            });
+        return this.view(name).create(query, (err) => {
+            return callback(err);
         });
-
     }
 
     /**
-     * @class DataModelMigration
-     * @property {string} name
-     * @property {string} description
-     * @property {string} model
-     * @property {string} appliesTo
-     * @property {string} version
-     * @property {array} add
-     * @property {array} remove
-     * @property {array} change
-     */
-    /**
      * @param {string} name
-     * @returns {{exists: Function}}
      */
     table(name) {
         const self = this;
+        let schema = 'public';
+        let table = name;
+        const matches = /(\w+)\.(\w+)/.exec(name);
+        if (matches) {
+            schema = matches[1];
+            table = matches[2];
+        }
         return {
             /**
              * @param {function(Error,Boolean=)} callback
              */
             exists: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=\'public\' AND table_type=\'BASE TABLE\' AND table_name=?',
-                    [name], function (err, result) {
-                        if (err) { callback(err); return; }
-                        callback(null, (result[0].count > 0));
+                self.execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_type=\'BASE TABLE\' AND table_name=?',
+                    [
+                        schema,
+                        table
+                    ], function (err, result) {
+                        if (err) {
+                            return callback(err);
+                        }
+                        return callback(null, (result[0].count > 0));
                     });
+            },
+            existsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.exists((err, value) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(value);
+                    });
+                });
             },
             /**
              * @param {function(Error,string=)} callback
              */
             version: function (callback) {
-                self.execute('SELECT MAX("version") AS version FROM migrations WHERE "appliesTo"=?',
-                    [name], function (err, result) {
+                self.execute('SELECT MAX("version") AS "version" FROM "migrations" WHERE "appliesTo"=?',
+                    [
+                        name
+                    ], function (err, result) {
                         if (err) { callback(err); return; }
                         if (result.length === 0)
                             callback(null, '0.0');
@@ -579,236 +565,675 @@ class PostgreSQLAdapter {
                             callback(null, result[0].version || '0.0');
                     });
             },
+            versionAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.version((err, value) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(value);
+                    });
+                });
+            },
             /**
              * @param {function(Error,Boolean=)} callback
              */
             has_sequence: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT COUNT(*) FROM information_schema.columns WHERE table_name=? AND table_schema=\'public\' AND ("column_default" ~ \'^nextval\\((.*?)\\)$\')',
-                    [name], function (err, result) {
+                self.execute('SELECT COUNT(*) FROM information_schema.columns WHERE table_name=? AND table_schema=? AND ("column_default" ~ \'^nextval\\((.*?)\\)$\')',
+                    [
+                        table,
+                        schema
+                    ], function (err, result) {
                         if (err) { callback(err); return; }
                         callback(null, (result[0].count > 0));
                     });
             },
             /**
-             * @param {function(Error,{columnName:string,ordinal:number,dataType:*, maxLength:number,isNullable:number }[]=)} callback
+             * @param {function(Error,{name:string, ordinal:number, type:*, size:number, nullable:boolean }[]=)} callback
              */
             columns: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT column_name AS "columnName", ordinal_position as "ordinal", data_type as "dataType",' +
-                    'character_maximum_length as "maxLength", is_nullable AS  "isNullable", column_default AS "defaultValue"' +
-                    ' FROM information_schema.columns WHERE table_name=?',
-                    [name], function (err, result) {
-                        if (err) { callback(err); return; }
-                        callback(null, result);
+                self.execute('SELECT column_name AS "name", ordinal_position as "ordinal", data_type as "type",' +
+                    'character_maximum_length as "size", is_nullable AS  "nullable", column_default AS "defaultValue"' +
+                    ' FROM information_schema.columns WHERE table_name=? AND table_schema=?',
+                    [
+                        table,
+                        schema
+                    ], function (err, result) {
+                        if (err) { 
+                            return callback(err);
+                        }
+                        // format result
+                        result.forEach((column) => {
+                            column.nullable = (column.nullable === 'YES');
+                        });
+                        return callback(null, result);
                     });
+            },
+            columnsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.columns((err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * @param {Array<*>} fields
+             * @param callback
+             */
+             create: function (fields, callback) {
+                callback = callback || function () { };
+                fields = fields || [];
+                if (!Array.isArray(fields)) {
+                    return callback(new Error('Invalid argument type. Expected Array.'));
+                }
+                if (fields.length === 0) {
+                    return callback(new Error('Invalid argument. Fields collection cannot be empty.'));
+                }
+                const formatter = new PostgreSQLFormatter();
+                let strFields = fields.filter((x) => {
+                    return !x.oneToMany;
+                }).map((field) => {
+                    const escapedField = formatter.escapeName(field.name);
+                    return escapedField + ' ' + self.formatType(field);
+                }).join(', ');
+
+                //add primary key constraint
+                const strPKFields = fields.filter((x) => {
+                    return (x.primary === true || x.primary === 1);
+                }).map((field) => {
+                    return formatter.escapeName(field.name);
+                }).join(', ');
+                if (strPKFields.length > 0) {
+                    strFields += ', ';
+                    strFields += sprintf('PRIMARY KEY(%s)', strPKFields);
+                }
+                const escapedTable = new PostgreSQLFormatter().escapeName(name);
+                const sql = sprintf('CREATE TABLE %s (%s)', escapedTable, strFields);
+                self.execute(sql, null, function (err) {
+                    callback(err);
+                });
+            },
+            createAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    this.create(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * Alters the table by adding an array of fields
+             * @param {Array<*>} fields
+             * @param callback
+             */
+             add: function (fields, callback) {
+                callback = callback || function () { };
+                fields = fields || [];
+                if (Array.isArray(fields) === false) {
+                    //invalid argument exception
+                    return callback(new Error('Invalid argument type. Expected Array.'));
+                }
+                if (fields.length === 0) {
+                    // do nothing
+                    return callback();
+                }
+                // generate SQL statement
+                const formatter = new PostgreSQLFormatter();
+                const escapedTable = new PostgreSQLFormatter().escapeName(name);
+                const sql = fields.map((field) => {
+                    const escapedField = formatter.escapeName(field.name);
+                    return sprintf('ALTER TABLE %s ADD COLUMN %s %s', escapedTable, escapedField, self.formatType(field));
+                }).join(';');
+                self.execute(sql, [], function (err) {
+                    callback(err);
+                });
+            },
+            addAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    this.add(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * Alters the table by modifying an array of fields
+             * @param {Array<*>} fields
+             * @param callback
+             */
+             change: function (fields, callback) {
+                callback = callback || function () { };
+                fields = fields || [];
+                if (Array.isArray(fields) === false) {
+                    //invalid argument exception
+                    return callback(new Error('Invalid argument type. Expected Array.'));
+                }
+                if (fields.length === 0) {
+                    //do nothing
+                    return callback();
+                }
+                //generate SQL statement
+                const formatter = new PostgreSQLFormatter();
+                const escapedTable = formatter.escapeName(name);
+                let sql = fields.map((field) => {
+                    const escapedType = self.formatType(field, '%t');
+                    const escapedField = formatter.escapeName(field.name);
+                    return sprintf('ALTER TABLE %s ALTER COLUMN %s TYPE %s;', escapedTable, escapedField, escapedType);
+                }).join('');
+                fields.forEach((field) => {
+                    const escapedField = formatter.escapeName(field.name);
+                    sql += sprintf('ALTER TABLE %s ALTER COLUMN %s %s;', escapedTable, escapedField, field.nullable ? 'DROP NOT NULL': 'SET NOT NULL');
+                });
+                self.execute(sql, [], function (err) {
+                    callback(err);
+                });
+            },
+            changeAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    this.change(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+        };
+    }
+
+    /**
+     * Initializes database view helper.
+     * @param {string} name - A string that represents the view name
+     * @returns {*}
+     */
+     view(name) {
+        const self = this;
+        let schema = 'public';
+        let view = name;
+        const matches = /(\w+)\.(\w+)/.exec(name);
+        if (matches) {
+            //get schema owner
+            schema = matches[1];
+            //get table name
+            view = matches[2];
+        }
+        return {
+            /**
+             * @param {Function} callback
+             */
+            exists: function (callback) {
+                callback = callback || function () { };
+                self.execute('SELECT COUNT(*) AS "count" FROM "information_schema"."tables" WHERE "table_schema"=? AND "table_type"=\'VIEW\' AND "table_name"=?',
+                [
+                    schema,
+                    view
+                ], function (err, result) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    callback(null, result[0].count === 1);
+                });
+            },
+            existsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.exists((err, value) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(value);
+                    });
+                });
+            },
+            /**
+             * @param {Function} callback
+             */
+            drop: function (callback) {
+                callback = callback || function () { };
+                self.open(function (err) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    self.execute('SELECT COUNT(*) AS "count" FROM "information_schema"."tables" WHERE "table_schema"=? AND "table_type"=\'VIEW\' AND "table_name"=?',
+                    [
+                        schema,
+                        view
+                    ], function (err, result) {
+                        if (err) {
+                            return callback(err);
+                        }
+                        const exists = (result[0].count > 0);
+                        if (exists) {
+                            const formatter = new PostgreSQLFormatter();
+                            const sql = sprintf('DROP VIEW %s', formatter.escapeName(name));
+                            return self.execute(sql, [], function (err) {
+                                if (err) {
+                                    return callback(err);
+                                }
+                                return callback();
+                            });
+                        }
+                        return callback();
+                    });
+                });
+            },
+            dropAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.drop((err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve();
+                    });
+                });
+            },
+            /**
+             * @param {QueryExpression|*} q
+             * @param {Function} callback
+             */
+            create: function (q, callback) {
+                const thisArg = this;
+                self.executeInTransaction(function (transcactionCallback) {
+                    return thisArg.drop((err) => {
+                        if (err) {
+                            return transcactionCallback(err);
+                        }
+                        try {
+                            const formatter = new PostgreSQLFormatter();
+                            const sql = sprintf('CREATE VIEW %s AS ', formatter.escapeName(name)) + formatter.format(q);
+                            return self.execute(sql, [], (err) => {
+                                return transcactionCallback(err);
+                            });
+                        }
+                        catch (error) {
+                            return transcactionCallback(error);
+                        }
+                    });
+                }, (err) => {
+                    return callback(err);
+                });
+            },
+            createAsync: function (q) {
+                return new Promise((resolve, reject) => {
+                    this.create(q, (err) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve();
+                    });
+                });
             }
         };
     }
 
     /*
-    * @param obj {DataModelMigration|*} An Object that represents the data model scheme we want to migrate
+    * @param obj {{appliesTo: string, model: string, version: string, description: string, add: Array<*>,remove: Array<*>,change: Array<*>}} An Object that represents the data model scheme we want to migrate
     * @param callback {Function}
     */
     migrate(obj, callback) {
-        if (obj === null)
-            return;
+        if (obj === null) {
+            return callback();
+        }
         const self = this;
-        /**
-         * @type {DataModelMigration|*}
-         */
         const migration = obj;
-
-        const format = function (format, obj) {
-            let result = format;
-            if (/%t/.test(format))
-                result = result.replace(/%t/g, PostgreSQLAdapter.formatType(obj));
-            if (/%f/.test(format))
-                result = result.replace(/%f/g, obj.name);
-            return result;
-        };
-
-        if (migration.appliesTo === null)
-            throw new Error("Model name is undefined");
+        if (migration.appliesTo === null) {
+            return callback(new Error('Target data object is undefined'));
+        }
+        //columns to be removed (deprecated + unsupported)
+        if (Array.isArray(migration.remove)) {
+            if (migration.remove.length > 0) {
+                return callback(new Error('Data migration remove operation is not supported by this adapter.'));
+            }
+        }
+        //columns to be changed (deprecated + unsupported)
+        if (Array.isArray(migration.change)) {
+            if (migration.change.length > 0) {
+                return callback(new Error('Data migration change operation is not supported by this adapter. Use add collection instead.'));
+            }
+        }
         self.open(function (err) {
             if (err) {
-                callback.call(self, err);
+                return callback(err);
             }
             else {
-                async.waterfall([
-                    //1. Check migrations table existence
-                    function (cb) {
-                        if (PostgreSQLAdapter.supportMigrations) {
-                            cb(null, 1);
-                            return;
-                        }
-                        self.table('migrations').exists(function (err, exists) {
-                            if (err) { cb(err); return; }
-                            cb(null, exists);
+                (async function () {
+                    let exists = await self.table('migrations').existsAsync();
+                    if (exists === false) {
+                        // create migration table
+                        await self.executeAsync(`
+                            CREATE TABLE migrations(
+                                "id" SERIAL NOT NULL,
+                                "appliesTo" varchar(80) NOT NULL,
+                                "model" varchar(120) NULL,
+                                "description" varchar(512),
+                                "version" varchar(40) NOT NULL,
+                                PRIMARY KEY("id"))
+                        `);
+                    }
+                    const version = await self.table(migration.appliesTo).versionAsync();
+                    if (version >= migration.version) {
+                        // nothing to do
+                        Object.assign(migration, {
+                            updated: true
                         });
-                    },
-                    //2. Create migrations table if not exists
-                    function (arg, cb) {
-                        if (arg > 0) { cb(null, 0); return; }
-                        //create migrations table
-                        self.execute('CREATE TABLE migrations(id SERIAL NOT NULL, ' +
-                            '"appliesTo" varchar(80) NOT NULL, "model" varchar(120) NULL, "description" varchar(512),"version" varchar(40) NOT NULL)',
-                            ['migrations'], function (err) {
-                                if (err) { cb(err); return; }
-                                PostgreSQLAdapter.supportMigrations = true;
-                                cb(null, 0);
-                            });
-                    },
-                    //3. Check if migration has already been applied
-                    function (arg, cb) {
-                        self.table(migration.appliesTo).version(function (err, version) {
-                            if (err) { cb(err); return; }
-                            cb(null, (version >= migration.version));
-                        });
-
-                    },
-                    //4a. Check table existence
-                    function (arg, cb) {
-                        //migration has already been applied (set migration.updated=true)
-                        if (arg) {
-                            obj['updated'] = true;
-                            return cb(null, -1);
+                        // exit
+                        return -1; 
+                    }
+                    exists = await self.table(migration.appliesTo).existsAsync();
+                    if (exists == false) {
+                        // get columns
+                        await self.table(migration.appliesTo).createAsync(migration.add);
+                    } else {
+                        // get columns
+                        const columns = await self.table(migration.appliesTo).createAsync(migration.add);
+                        const addColumns = [];
+                        const updateColumns = [];
+                        for (const field of migration.add) {
+                             //check if field exists or not
+                             const column = columns.find((item) => item.name === field.name);
+                             if (column != null) {
+                                 //get original field size
+                                 const originalSize = column.maxLength;
+                                 //and new field size
+                                 const newSize = field.size;
+                                 //add expression for modifying column (size)
+                                 if (newSize != null && originalSize !== newSize) {
+                                     updateColumns.push(field);
+                                 }
+                             }
+                             else {
+                                addColumns.push(field);
+                             }
                         }
-                        else {
-                            self.table(migration.appliesTo).exists(function (err, exists) {
-                                if (err) { cb(err); return; }
-                                cb(null, exists ? 1 : 0);
-                            });
-
+                        if (addColumns.length > 0) {
+                            self.table(migration.appliesTo).addAsync(addColumns);
                         }
-                    },
-                    //4b. Get table columns
-                    function (arg, cb) {
-                        //migration has already been applied
-                        if (arg < 0) { cb(null, [arg, null]); return; }
-                        self.table(migration.appliesTo).columns(function (err, columns) {
-                            if (err) { cb(err); return; }
-                            cb(null, [arg, columns]);
-                        });
-                    },
-                    //5. Migrate target table (create or alter)
-                    function (args, cb) {
-                        //migration has already been applied
-                        if (args[0] < 0) { cb(null, args[0]); return; }
-                        const columns = args[1];
-                        if (args[0] === 0) {
-                            //create table and
-                            const strFields = _.map(_.filter(migration.add, (x) => {
-                                return !x.oneToMany;
-                            }), (x) => {
-                                return format('"%f" %t', x);
-                            }).join(', ');
-                            const key = _.find(migration.add, (x) => { return x.primary; });
-                            const sql = util.format('CREATE TABLE "%s" (%s, PRIMARY KEY("%s"))', migration.appliesTo, strFields, key.name);
-                            self.execute(sql, null, function (err) {
-                                if (err) { return cb(err); }
-                                return cb(null, 1);
-                            });
-
-                        }
-                        else {
-                            const expressions = [];
-                            let column;
-                            let fname;
-                            const findColumnFunc = (name) => {
-                                return _.find(columns, (x) => {
-                                    return x.columnName === name;
-                                });
-                            };
-                            //1. enumerate fields to delete
-                            if (migration.remove) {
-                                for (let i = 0; i < migration.remove.length; i++) {
-                                    fname = migration.remove[i].name;
-                                    column = findColumnFunc(fname);
-                                    if (typeof column !== 'undefined') {
-                                        let k = 1, deletedColumnName = util.format('xx%s1_%s', k.toString(), column.columnName);
-                                        while (typeof findColumnFunc(deletedColumnName) !== 'undefined') {
-                                            k += 1;
-                                            deletedColumnName = util.format('xx%s_%s', k.toString(), column.columnName);
-                                        }
-                                        expressions.push(util.format('ALTER TABLE "%s" RENAME COLUMN "%s" TO %s', migration.appliesTo, column.columnName, deletedColumnName));
-                                    }
-                                }
-                            }
-                            //2. enumerate fields to add
-                            let newSize, originalSize, fieldName, nullable;
-                            if (migration.add) {
-                                for (let i = 0; i < migration.add.length; i++) {
-                                    //get field name
-                                    fieldName = migration.add[i].name;
-                                    //check if field exists or not
-                                    column = findColumnFunc(fieldName);
-                                    if (typeof column !== 'undefined') {
-                                        //get original field size
-                                        originalSize = column.maxLength;
-                                        //and new field size
-                                        newSize = migration.add[i].size;
-                                        //add expression for modifying column (size)
-                                        if ((typeof newSize !== 'undefined') && (originalSize !== newSize)) {
-                                            expressions.push(util.format('UPDATE pg_attribute SET atttypmod = %s+4 WHERE attrelid = \'"%s"\'::regclass AND attname = \'%s\';', newSize, migration.appliesTo, fieldName));
-                                        }
-                                        //update nullable attribute
-                                        nullable = (typeof migration.add[i].nullable !== 'undefined') ? migration.add[i].nullable : true;
-                                        expressions.push(util.format('ALTER TABLE "%s" ALTER COLUMN "%s" %s', migration.appliesTo, fieldName, (nullable ? 'DROP NOT NULL' : 'SET NOT NULL')));
-                                    }
-                                    else {
-                                        //add expression for adding column
-                                        expressions.push(util.format('ALTER TABLE "%s" ADD COLUMN "%s" %s', migration.appliesTo, fieldName, PostgreSQLAdapter.formatType(migration.add[i])));
-                                    }
-                                }
-                            }
-
-                            //3. enumerate fields to update
-                            if (migration.change) {
-                                for (let i = 0; i < migration.change.length; i++) {
-                                    const change = migration.change[i];
-                                    column = findColumnFunc(change);
-                                    if (typeof column !== 'undefined') {
-                                        //important note: Alter column operation is not supported for column types
-                                        expressions.push(util.format('ALTER TABLE "%s" ALTER COLUMN "%s" TYPE %s', migration.appliesTo, migration.add[i].name, PostgreSQLAdapter.formatType(migration.change[i])));
-                                    }
-                                }
-                            }
-
-                            if (expressions.length > 0) {
-                                self.execute(expressions.join(';'), null, function (err) {
-                                    if (err) { cb(err); return; }
-                                    return cb(null, 1);
-                                });
-                            }
-
-                            else
-                                cb(null, 2);
-                        }
-                    }, function (arg, cb) {
-
-                        if (arg > 0) {
-                            //log migration to database
-                            self.execute('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)', [migration.appliesTo,
-                            migration.model,
-                            migration.version,
-                            migration.description], function (err) {
-                                if (err)
-                                    throw err;
-                                return cb(null, 1);
-                            });
-                        }
-                        else {
-                            migration['updated'] = true;
-                            cb(null, arg);
+                        if (updateColumns.length > 0) {
+                            self.table(migration.appliesTo).changeAsync(updateColumns);
                         }
                     }
-                ], function (err, result) {
-                    callback(err, result);
+                    await self.execute('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)',
+                    [
+                        migration.appliesTo,
+                        migration.model,
+                        migration.version,
+                        migration.description
+                    ]);
+                    Object.assign(migration, {
+                        updated: true
+                    });
+                    return 1; 
+                })().then((result) => {
+                    return callback(null, result);
+                }).catch((err) => {
+                    return callback(err)
                 });
             }
         });
     }
+
+    /**
+     * Table indexes helper
+     * @param {string} name 
+     */
+     indexes(name) {
+        const self = this;
+        let schema = 'public';
+        let table = name;
+        const matches = /(\w+)\.(\w+)/.exec(name);
+        if (matches) {
+            //get schema owner
+            schema = matches[1];
+            //get table name
+            table = matches[2];
+        }
+        const formatter = new PostgreSQLFormatter();
+        return {
+            list: function (callback) {
+                const this1 = this;
+                if (Object.prototype.hasOwnProperty.call(this1, '_indexes')) {
+                    return callback(null, this1._indexes);
+                }
+                const sqlIndexes = 'SELECT indexname as "name" FROM pg_indexes WHERE schemaname=? AND tablename=?';
+                const sqlIndexColumns = `
+                    with ind_cols as (
+                    select
+                        n.nspname as "schema_name",
+                        t.relname as "table_name",
+                        i.relname as "index_name",
+                        a.attname as "column_name",
+                        1 + array_position(ix.indkey, a.attnum) as column_position
+                    from
+                        pg_catalog.pg_class t
+                    join pg_catalog.pg_attribute a on t.oid = a.attrelid 
+                    join pg_catalog.pg_index ix on t.oid = ix.indrelid
+                    join pg_catalog.pg_class i on a.attnum = any(ix.indkey)
+                    and i.oid = ix.indexrelid
+                    join pg_catalog.pg_namespace n on n.oid = t.relnamespace
+                    where t.relkind = 'r'
+                    order by
+                        t.relname,
+                        i.relname,
+                        array_position(ix.indkey, a.attnum)
+                    )
+                    select * 
+                    from ind_cols
+                    where schema_name = ?
+                    and table_name  = ?
+                    order by schema_name, table_name
+                `;
+                    (async () => {
+                        const results = [];
+                        results.push(await self.executeAsync(sqlIndexes, [
+                            schema,
+                            table
+                        ]));
+                        results.push(await self.executeAsync(sqlIndexColumns, [
+                            schema,
+                            table
+                        ]));
+                        return results;
+                    })().then((results) => {
+                    const indexes = results[0].map(function (index) {
+                        return {
+                            name: index.name,
+                            columns: results[1].filter((y) => index.name === y.index_name).map((y) => y.column_name)
+                        };
+                    });
+                    this1._indexes = indexes;
+                    return callback(null, indexes);
+                }).catch((err) => {
+                    return callback(err);
+                });
+            },
+            listAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.list((err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            /**
+             * @param {string} indexName
+             * @param {Array|string} columns
+             * @param {Function} callback
+             */
+            create: function (indexName, columns, callback) {
+                const cols = [];
+                if (typeof columns === 'string') {
+                    cols.push(columns);
+                }
+                else if (Array.isArray(columns)) {
+                    cols.push.apply(cols, columns);
+                }
+                else {
+                    return callback(new Error('Invalid parameter. Columns parameter must be a string or an array of strings.'));
+                }
+                const thisArg = this;
+                thisArg.list(function (err, indexes) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    const findIndex = indexes.find((x) => {
+                        return x.name === indexName;
+                    });
+                    //format create index SQL statement
+                    const escapeColumns = cols.map(function (x) {
+                        return formatter.escapeName(x);
+                    }).join(',');
+                    const sqlCreateIndex = `CREATE INDEX ${formatter.escapeName(indexName)} ON ${formatter.escapeName(name)} (${escapeColumns})`;
+                    if (findIndex == null) {
+                        self.execute(sqlCreateIndex, [], (err) => {
+                            if (err) {
+                                return callback(err);
+                            }
+                            return callback(null, 1);
+                        });
+                    }
+                    else {
+                        let nCols = cols.length;
+                        //enumerate existing columns
+                        findIndex.columns.forEach(function (x) {
+                            if (cols.indexOf(x) >= 0) {
+                                //column exists in index
+                                nCols -= 1;
+                            }
+                        });
+                        if (nCols > 0) {
+                            //drop index
+                            thisArg.drop(name, function (err) {
+                                if (err) {
+                                    return callback(err);
+                                }
+                                //and create it
+                                return self.execute(sqlCreateIndex, [], (err) => {
+                                    if (err) {
+                                        return callback(err);
+                                    }
+                                    return callback(null, 1);
+                                });
+                            });
+                        }
+                        else {
+                            //do nothing
+                            return callback(null, 0);
+                        }
+                    }
+                });
+            },
+            /**
+             * @param {string} name
+             * @param {Array|string} columns
+             */
+            createAsync: function (name, columns) {
+                return new Promise((resolve, reject) => {
+                    this.create(name, columns, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            drop: function (indexName, callback) {
+                const thisArg = this;
+                if (typeof name !== 'string') {
+                    return callback(new Error('Name must be a valid string.'));
+                }
+                self.execute('SELECT indexname as "name" FROM pg_indexes WHERE schemaname=? AND tablename=? AND indexname=?', [
+                    schema,
+                    table,
+                    indexName
+                ], function (err, result) {
+                    if (err) {
+                        return callback(err);
+                    }
+                    if (result.length === 0) {
+                        return callback(null, 0);
+                    }
+                    self.execute(`DROP INDEX ${formatter.escapeName(indexName)}`, null, (err) => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        // cleanup indexes
+                        delete thisArg._indexes;
+                        // and return
+                        return callback(null, 1);
+                    });
+                });
+            },
+            dropAsync: function (name) {
+                return new Promise((resolve, reject) => {
+                    this.drop(name, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            }
+        };
+    }
+    /**
+     * Initializes database list helper.
+     * @param {string} name - A string that represents the view name
+     * @returns {*}
+     */
+     database(name) {
+        const self = this;
+        return {
+            exists: function (callback) {
+                return self.execute('SELECT "datname" AS "name" FROM pg_database WHERE "datname"=?;', [
+                    name
+                ], (err, results) => {
+                    if (err) {
+                        return callback();
+                    }
+                    return callback(null, results.length > 0);
+                });
+            },
+            existsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.exists((err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            create: function (callback) {
+                return self.execute(`CREATE DATABASE ${self.escapeName(name)};`, [], (err, results) => {
+                    if (err) {
+                        return callback();
+                    }
+                    return callback(null, results);
+                });
+            },
+            createAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    this.create(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            }
+        }
+     }
+
 }
 
 export {
