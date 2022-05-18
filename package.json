@@ -30,8 +30,6 @@
   },
   "homepage": "https://github.com/themost-framework/themost-adapters",
   "dependencies": {
-    "async": "^2.6.4",
-    "lodash": "^4.17.21",
     "pg": "^8.7.3",
     "pg-native": "^3.0.0",
     "sprintf-js": "^1.1.2"

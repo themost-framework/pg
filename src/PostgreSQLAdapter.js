@@ -1,7 +1,5 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
 import pg from 'pg';
-import async from 'async';
-import _ from 'lodash';
 import { QueryExpression, QueryField, SqlUtils } from '@themost/query';
 import { TraceUtils } from '@themost/common';
 import { PostgreSQLFormatter } from './PostgreSQLFormatter';
@@ -876,204 +874,106 @@ class PostgreSQLAdapter {
     }
 
     /*
-    * @param obj {DataModelMigration|*} An Object that represents the data model scheme we want to migrate
+    * @param obj {{appliesTo: string, model: string, version: string, description: string, add: Array<*>,remove: Array<*>,change: Array<*>}} An Object that represents the data model scheme we want to migrate
     * @param callback {Function}
     */
     migrate(obj, callback) {
-        if (obj === null)
-            return;
+        if (obj === null) {
+            return callback();
+        }
         const self = this;
-        /**
-         * @type {DataModelMigration|*}
-         */
         const migration = obj;
-
-        const format = function (format, obj) {
-            let result = format;
-            if (/%t/.test(format))
-                result = result.replace(/%t/g, self.formatType(obj));
-            if (/%f/.test(format))
-                result = result.replace(/%f/g, obj.name);
-            return result;
-        };
-
-        if (migration.appliesTo === null)
-            throw new Error('Model name is undefined');
+        if (migration.appliesTo === null) {
+            return callback(new Error('Target data object is undefined'));
+        }
+        //columns to be removed (deprecated + unsupported)
+        if (Array.isArray(migration.remove)) {
+            if (migration.remove.length > 0) {
+                return callback(new Error('Data migration remove operation is not supported by this adapter.'));
+            }
+        }
+        //columns to be changed (deprecated + unsupported)
+        if (Array.isArray(migration.change)) {
+            if (migration.change.length > 0) {
+                return callback(new Error('Data migration change operation is not supported by this adapter. Use add collection instead.'));
+            }
+        }
         self.open(function (err) {
             if (err) {
-                callback.call(self, err);
+                return callback(err);
             }
             else {
-                async.waterfall([
-                    //1. Check migrations table existence
-                    function (cb) {
-                        if (PostgreSQLAdapter.supportMigrations) {
-                            cb(null, 1);
-                            return;
-                        }
-                        self.table('migrations').exists(function (err, exists) {
-                            if (err) { cb(err); return; }
-                            cb(null, exists);
+                (async function () {
+                    let exists = await self.table('migrations').existsAsync();
+                    if (exists === false) {
+                        // create migration table
+                        await self.executeAsync(`
+                            CREATE TABLE migrations(
+                                "id" SERIAL NOT NULL,
+                                "appliesTo" varchar(80) NOT NULL,
+                                "model" varchar(120) NULL,
+                                "description" varchar(512),
+                                "version" varchar(40) NOT NULL,
+                                PRIMARY KEY("id"))
+                        `);
+                    }
+                    const version = await self.table(migration.appliesTo).versionAsync();
+                    if (version >= migration.version) {
+                        // nothing to do
+                        Object.assign(migration, {
+                            updated: true
                         });
-                    },
-                    //2. Create migrations table if not exists
-                    function (arg, cb) {
-                        if (arg > 0) { cb(null, 0); return; }
-                        //create migrations table
-                        self.execute('CREATE TABLE migrations(id SERIAL NOT NULL, ' +
-                            '"appliesTo" varchar(80) NOT NULL, "model" varchar(120) NULL, "description" varchar(512),"version" varchar(40) NOT NULL)',
-                            ['migrations'], function (err) {
-                                if (err) { cb(err); return; }
-                                PostgreSQLAdapter.supportMigrations = true;
-                                cb(null, 0);
-                            });
-                    },
-                    //3. Check if migration has already been applied
-                    function (arg, cb) {
-                        self.table(migration.appliesTo).version(function (err, version) {
-                            if (err) { cb(err); return; }
-                            cb(null, (version >= migration.version));
-                        });
-
-                    },
-                    //4a. Check table existence
-                    function (arg, cb) {
-                        //migration has already been applied (set migration.updated=true)
-                        if (arg) {
-                            obj['updated'] = true;
-                            return cb(null, -1);
+                        // exit
+                        return -1; 
+                    }
+                    exists = await self.table(migration.appliesTo).existsAsync();
+                    if (exists == false) {
+                        // get columns
+                        await self.table(migration.appliesTo).createAsync(migration.add);
+                    } else {
+                        // get columns
+                        const columns = await self.table(migration.appliesTo).createAsync(migration.add);
+                        const addColumns = [];
+                        const updateColumns = [];
+                        for (const field of migration.add) {
+                             //check if field exists or not
+                             const column = columns.find((item) => item.name === field.name);
+                             if (column != null) {
+                                 //get original field size
+                                 const originalSize = column.maxLength;
+                                 //and new field size
+                                 const newSize = field.size;
+                                 //add expression for modifying column (size)
+                                 if (newSize != null && originalSize !== newSize) {
+                                     updateColumns.push(field);
+                                 }
+                             }
+                             else {
+                                addColumns.push(field);
+                             }
                         }
-                        else {
-                            self.table(migration.appliesTo).exists(function (err, exists) {
-                                if (err) { cb(err); return; }
-                                cb(null, exists ? 1 : 0);
-                            });
-
+                        if (addColumns.length > 0) {
+                            self.table(migration.appliesTo).addAsync(addColumns);
                         }
-                    },
-                    //4b. Get table columns
-                    function (arg, cb) {
-                        //migration has already been applied
-                        if (arg < 0) { cb(null, [arg, null]); return; }
-                        self.table(migration.appliesTo).columns(function (err, columns) {
-                            if (err) { cb(err); return; }
-                            cb(null, [arg, columns]);
-                        });
-                    },
-                    //5. Migrate target table (create or alter)
-                    function (args, cb) {
-                        //migration has already been applied
-                        if (args[0] < 0) { cb(null, args[0]); return; }
-                        const columns = args[1];
-                        if (args[0] === 0) {
-                            //create table and
-                            const strFields = _.map(_.filter(migration.add, (x) => {
-                                return !x.oneToMany;
-                            }), (x) => {
-                                return format('"%f" %t', x);
-                            }).join(', ');
-                            const key = _.find(migration.add, (x) => { return x.primary; });
-                            const sql = sprintf('CREATE TABLE "%s" (%s, PRIMARY KEY("%s"))', migration.appliesTo, strFields, key.name);
-                            self.execute(sql, null, function (err) {
-                                if (err) { return cb(err); }
-                                return cb(null, 1);
-                            });
-
-                        }
-                        else {
-                            const expressions = [];
-                            let column;
-                            let fname;
-                            const findColumnFunc = (name) => {
-                                return _.find(columns, (x) => {
-                                    return x.columnName === name;
-                                });
-                            };
-                            //1. enumerate fields to delete
-                            if (migration.remove) {
-                                for (let i = 0; i < migration.remove.length; i++) {
-                                    fname = migration.remove[i].name;
-                                    column = findColumnFunc(fname);
-                                    if (typeof column !== 'undefined') {
-                                        let k = 1, deletedColumnName = sprintf('xx%s1_%s', k.toString(), column.columnName);
-                                        while (typeof findColumnFunc(deletedColumnName) !== 'undefined') {
-                                            k += 1;
-                                            deletedColumnName = sprintf('xx%s_%s', k.toString(), column.columnName);
-                                        }
-                                        expressions.push(sprintf('ALTER TABLE "%s" RENAME COLUMN "%s" TO %s', migration.appliesTo, column.columnName, deletedColumnName));
-                                    }
-                                }
-                            }
-                            //2. enumerate fields to add
-                            let newSize, originalSize, fieldName, nullable;
-                            if (migration.add) {
-                                for (let i = 0; i < migration.add.length; i++) {
-                                    //get field name
-                                    fieldName = migration.add[i].name;
-                                    //check if field exists or not
-                                    column = findColumnFunc(fieldName);
-                                    if (typeof column !== 'undefined') {
-                                        //get original field size
-                                        originalSize = column.maxLength;
-                                        //and new field size
-                                        newSize = migration.add[i].size;
-                                        //add expression for modifying column (size)
-                                        if ((typeof newSize !== 'undefined') && (originalSize !== newSize)) {
-                                            expressions.push(sprintf('UPDATE pg_attribute SET atttypmod = %s+4 WHERE attrelid = \'"%s"\'::regclass AND attname = \'%s\';', newSize, migration.appliesTo, fieldName));
-                                        }
-                                        //update nullable attribute
-                                        nullable = (typeof migration.add[i].nullable !== 'undefined') ? migration.add[i].nullable : true;
-                                        expressions.push(sprintf('ALTER TABLE "%s" ALTER COLUMN "%s" %s', migration.appliesTo, fieldName, (nullable ? 'DROP NOT NULL' : 'SET NOT NULL')));
-                                    }
-                                    else {
-                                        //add expression for adding column
-                                        expressions.push(sprintf('ALTER TABLE "%s" ADD COLUMN "%s" %s', migration.appliesTo, fieldName, self.formatType(migration.add[i])));
-                                    }
-                                }
-                            }
-
-                            //3. enumerate fields to update
-                            if (migration.change) {
-                                for (let i = 0; i < migration.change.length; i++) {
-                                    const change = migration.change[i];
-                                    column = findColumnFunc(change);
-                                    if (typeof column !== 'undefined') {
-                                        //important note: Alter column operation is not supported for column types
-                                        expressions.push(sprintf('ALTER TABLE "%s" ALTER COLUMN "%s" TYPE %s', migration.appliesTo, migration.add[i].name, self.formatType(migration.change[i])));
-                                    }
-                                }
-                            }
-
-                            if (expressions.length > 0) {
-                                self.execute(expressions.join(';'), null, function (err) {
-                                    if (err) { cb(err); return; }
-                                    return cb(null, 1);
-                                });
-                            }
-
-                            else
-                                cb(null, 2);
-                        }
-                    }, function (arg, cb) {
-
-                        if (arg > 0) {
-                            //log migration to database
-                            self.execute('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)', [migration.appliesTo,
-                            migration.model,
-                            migration.version,
-                            migration.description], function (err) {
-                                if (err)
-                                    throw err;
-                                return cb(null, 1);
-                            });
-                        }
-                        else {
-                            migration['updated'] = true;
-                            cb(null, arg);
+                        if (updateColumns.length > 0) {
+                            self.table(migration.appliesTo).changeAsync(updateColumns);
                         }
                     }
-                ], function (err, result) {
-                    callback(err, result);
+                    await self.execute('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)',
+                    [
+                        migration.appliesTo,
+                        migration.model,
+                        migration.version,
+                        migration.description
+                    ]);
+                    Object.assign(migration, {
+                        updated: true
+                    });
+                    return 1; 
+                })().then((result) => {
+                    return callback(null, result);
+                }).catch((err) => {
+                    return callback(err)
                 });
             }
         });
