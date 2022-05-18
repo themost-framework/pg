@@ -10,3 +10,7 @@ babel.config.js
 # gitpod
 .gitpod.dockerfile
 .gitpod.yml
+
+# build
+rollup.config.js
+babel.config.js

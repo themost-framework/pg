@@ -1,223 +1,229 @@
-import { PostgreSQLAdapter } from '../src/PostgreSQLAdapter';
 import { PostgreSQLFormatter } from '../src/PostgreSQLFormatter';
 import { QueryExpression } from '@themost/query';
-
-const testConnection = {
-    host: process.env.POSTGRES_HOST,
-    port: process.env.POSTGRES_PORT,
-    database: process.env.POSTGRES_DB,
-    user: process.env.POSTGRES_USER
-};
+import { TestApplication } from './TestApplication';
 
 describe('PostgreSQLAdapter', () => {
     /**
-     * @type {PostgreSQLAdapter}
+     * @type {TestApplication}
      */
-    let db;
+    let app;
+    beforeAll(async () => {
+        app = new TestApplication(__dirname);
+        await app.tryCreateDatabase();
+    });
     beforeEach(async () => {
-        db = new PostgreSQLAdapter(testConnection);
+        //
+    });
+    afterAll(async () => {
+        await app.finalize();
     });
     afterEach(async () => {
-        if (db == null) {
-            return;
-        }
-        await db.closeAsync();
-    })
-    it('should create instance', async () => {
-        await expect(db.openAsync()).resolves.toBe(undefined);
+        //
     });
-    it('should list databases', async () => {
-        /**
-         * @type {Array<{name: string}>}
-         */
-        const databases = await db.executeAsync('SELECT datname AS "name" FROM pg_database;');
-        expect(databases).toBeInstanceOf(Array);
-        expect(databases.length).toBeTruthy();
+    it('should check database', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            let exists = await context.db.database('a_test_database').existsAsync();
+            expect(exists).toBeFalsy();
+            exists = await context.db.database(process.env.POSTGRES_DB).existsAsync();
+            expect(exists).toBeTruthy();
+        });
     });
 
-    it('should validate table existence', async () => {
-        const exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeFalsy();
+    it('should check table', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            const exists = await context.db.table('Table1').existsAsync();
+            expect(exists).toBeFalsy();
+        });
     });
 
     it('should create table', async () => {
-        let exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeFalsy();
-        await db.table('Table1').createAsync([
-            {
-                name: 'id',
-                type: 'Counter',
-                primary: true,
-                nullable: false
-            },
-            {
-                name: 'name',
-                type: 'Text',
-                size: 255,
-                nullable: false
-            },
-            {
-                name: 'description',
-                type: 'Text',
-                size: 255,
-                nullable: true
-            }
-        ]);
-        exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeTruthy();
-        // get columns
-        const columns = await db.table('Table1').columnsAsync();
-        expect(columns).toBeInstanceOf(Array);
-        let column = columns.find((col) => col.name === 'id' );
-        expect(column).toBeTruthy();
-        expect(column.nullable).toBeFalsy();
-        column = columns.find((col) => col.name === 'description' );
-        expect(column).toBeTruthy();
-        expect(column.nullable).toBeTruthy();
-        expect(column.size).toBe(255);
-        await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
+        await app.executeInTestTranscaction(async (context) => {
+            const db = context.db;
+            let exists = await db.table('Table1').existsAsync();
+            expect(exists).toBeFalsy();
+            await context.db.table('Table1').createAsync([
+                {
+                    name: 'id',
+                    type: 'Counter',
+                    primary: true,
+                    nullable: false
+                },
+                {
+                    name: 'name',
+                    type: 'Text',
+                    size: 255,
+                    nullable: false
+                },
+                {
+                    name: 'description',
+                    type: 'Text',
+                    size: 255,
+                    nullable: true
+                }
+            ]);
+            exists = await db.table('Table1').existsAsync();
+            expect(exists).toBeTruthy();
+            // get columns
+            const columns = await db.table('Table1').columnsAsync();
+            expect(columns).toBeInstanceOf(Array);
+            let column = columns.find((col) => col.name === 'id');
+            expect(column).toBeTruthy();
+            expect(column.nullable).toBeFalsy();
+            column = columns.find((col) => col.name === 'description');
+            expect(column).toBeTruthy();
+            expect(column.nullable).toBeTruthy();
+            expect(column.size).toBe(255);
+            await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
+        });
     });
 
     it('should alter table', async () => {
-        let exists = await db.table('Table2').existsAsync();
-        expect(exists).toBeFalsy();
-        await db.table('Table2').createAsync([
-            {
-                name: 'id',
-                type: 'Counter',
-                primary: true,
-                nullable: false
-            },
-            {
-                name: 'name',
-                type: 'Text',
-                size: 255,
-                nullable: false
-            }
-        ]);
-        exists = await db.table('Table2').existsAsync();
-        expect(exists).toBeTruthy();
-        await db.table('Table2').addAsync([
-            {
-                name: 'description',
-                type: 'Text',
-                size: 255,
-                nullable: true
-            }
-        ]);
-        // get columns
-        let columns = await db.table('Table2').columnsAsync();
-        expect(columns).toBeInstanceOf(Array);
-        let column = columns.find((col) => col.name === 'description' );
-        expect(column).toBeTruthy();
+        await app.executeInTestTranscaction(async (context) => {
+            const db = context.db;
+            let exists = await db.table('Table2').existsAsync();
+            expect(exists).toBeFalsy();
+            await db.table('Table2').createAsync([
+                {
+                    name: 'id',
+                    type: 'Counter',
+                    primary: true,
+                    nullable: false
+                },
+                {
+                    name: 'name',
+                    type: 'Text',
+                    size: 255,
+                    nullable: false
+                }
+            ]);
+            exists = await db.table('Table2').existsAsync();
+            expect(exists).toBeTruthy();
+            await db.table('Table2').addAsync([
+                {
+                    name: 'description',
+                    type: 'Text',
+                    size: 255,
+                    nullable: true
+                }
+            ]);
+            // get columns
+            let columns = await db.table('Table2').columnsAsync();
+            expect(columns).toBeInstanceOf(Array);
+            let column = columns.find((col) => col.name === 'description');
+            expect(column).toBeTruthy();
 
-        await db.table('Table2').changeAsync([
-            {
-                name: 'description',
-                type: 'Text',
-                size: 512,
-                nullable: true
-            }
-        ]);
-        columns = await db.table('Table2').columnsAsync();
-        column = columns.find((col) => col.name === 'description' );
-        expect(column.size).toEqual(512);
-        expect(column.nullable).toBeTruthy();
-        await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table2')}`);
+            await db.table('Table2').changeAsync([
+                {
+                    name: 'description',
+                    type: 'Text',
+                    size: 512,
+                    nullable: true
+                }
+            ]);
+            columns = await db.table('Table2').columnsAsync();
+            column = columns.find((col) => col.name === 'description');
+            expect(column.size).toEqual(512);
+            expect(column.nullable).toBeTruthy();
+            await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table2')}`);
+        });
+
     });
 
 
     it('should create view', async () => {
-        let exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeFalsy();
-        await db.table('Table1').createAsync([
-            {
-                name: 'id',
-                type: 'Counter',
-                primary: true,
-                nullable: false
-            },
-            {
-                name: 'name',
-                type: 'Text',
-                size: 255,
-                nullable: false
-            },
-            {
-                name: 'description',
-                type: 'Text',
-                size: 255,
-                nullable: true
-            }
-        ]);
-        exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeTruthy();
 
-        exists = await db.view('View1').existsAsync();
-        expect(exists).toBeFalsy();
+        await app.executeInTestTranscaction(async (context) => {
+            const db = context.db;
+            let exists = await db.table('Table1').existsAsync();
+            expect(exists).toBeFalsy();
+            await db.table('Table1').createAsync([
+                {
+                    name: 'id',
+                    type: 'Counter',
+                    primary: true,
+                    nullable: false
+                },
+                {
+                    name: 'name',
+                    type: 'Text',
+                    size: 255,
+                    nullable: false
+                },
+                {
+                    name: 'description',
+                    type: 'Text',
+                    size: 255,
+                    nullable: true
+                }
+            ]);
+            exists = await db.table('Table1').existsAsync();
+            expect(exists).toBeTruthy();
 
-        const query = new QueryExpression().select('id', 'name', 'description').from('Table1');
-        await db.view('View1').createAsync(query);
+            exists = await db.view('View1').existsAsync();
+            expect(exists).toBeFalsy();
 
-        exists = await db.view('View1').existsAsync();
-        expect(exists).toBeTruthy();
-        
-        await db.view('View1').dropAsync();
+            const query = new QueryExpression().select('id', 'name', 'description').from('Table1');
+            await db.view('View1').createAsync(query);
 
-        exists = await db.view('View1').existsAsync();
-        expect(exists).toBeFalsy();
-        
+            exists = await db.view('View1').existsAsync();
+            expect(exists).toBeTruthy();
+
+            await db.view('View1').dropAsync();
+
+            exists = await db.view('View1').existsAsync();
+            expect(exists).toBeFalsy();
+        });
     });
 
+    it('should create index', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            const db = context.db;
+            let exists = await db.table('Table1').existsAsync();
+            expect(exists).toBeFalsy();
+            await db.table('Table1').createAsync([
+                {
+                    name: 'id',
+                    type: 'Counter',
+                    primary: true,
+                    nullable: false
+                },
+                {
+                    name: 'name',
+                    type: 'Text',
+                    size: 255,
+                    nullable: false
+                },
+                {
+                    name: 'description',
+                    type: 'Text',
+                    size: 255,
+                    nullable: true
+                }
+            ]);
+            exists = await db.table('Table1').existsAsync();
+            expect(exists).toBeTruthy();
 
-    fit('should create index', async () => {
-        let exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeFalsy();
-        await db.table('Table1').createAsync([
-            {
-                name: 'id',
-                type: 'Counter',
-                primary: true,
-                nullable: false
-            },
-            {
-                name: 'name',
-                type: 'Text',
-                size: 255,
-                nullable: false
-            },
-            {
-                name: 'description',
-                type: 'Text',
-                size: 255,
-                nullable: true
-            }
-        ]);
-        exists = await db.table('Table1').existsAsync();
-        expect(exists).toBeTruthy();
+            let list = await db.indexes('Table1').listAsync();
+            expect(list).toBeInstanceOf(Array);
+            exists = list.findIndex((index) => index.name === 'idx_name') < 0;
 
-        let list = await db.indexes('Table1').listAsync();
-        expect(list).toBeInstanceOf(Array);
-        exists = list.findIndex((index) => index.name === 'idx_name') < 0;
+            await db.indexes('Table1').createAsync('idx_name', [
+                'name'
+            ]);
 
-        await db.indexes('Table1').createAsync('idx_name', [
-            'name'
-        ]);
+            list = await db.indexes('Table1').listAsync();
+            expect(list).toBeInstanceOf(Array);
+            exists = list.findIndex((index) => index.name === 'idx_name') >= 0;
+            expect(exists).toBeTruthy();
 
-        list = await db.indexes('Table1').listAsync();
-        expect(list).toBeInstanceOf(Array);
-        exists = list.findIndex((index) => index.name === 'idx_name') >= 0;
-        expect(exists).toBeTruthy();
-        
-        await db.indexes('Table1').dropAsync('idx_name');
+            await db.indexes('Table1').dropAsync('idx_name');
 
-        list = await db.indexes('Table1').listAsync();
-        expect(list).toBeInstanceOf(Array);
-        exists = list.findIndex((index) => index.name === 'idx_name') >= 0;
-        expect(exists).toBeFalsy();
+            list = await db.indexes('Table1').listAsync();
+            expect(list).toBeInstanceOf(Array);
+            exists = list.findIndex((index) => index.name === 'idx_name') >= 0;
+            expect(exists).toBeFalsy();
 
-        await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
-        
+            await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
+        });
     });
-
 });

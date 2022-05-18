@@ -138,7 +138,8 @@ class PostgreSQLAdapter {
      * @param {function(Error=)} callback
      */
     close(callback) {
-        this.disconnect(callback);
+        callback = callback || function () { };
+        return this.disconnect(callback);
     }
 
     /**
@@ -1184,6 +1185,54 @@ class PostgreSQLAdapter {
             }
         };
     }
+    /**
+     * Initializes database list helper.
+     * @param {string} name - A string that represents the view name
+     * @returns {*}
+     */
+     database(name) {
+        const self = this;
+        return {
+            exists: function (callback) {
+                return self.execute('SELECT "datname" AS "name" FROM pg_database WHERE "datname"=?;', [
+                    name
+                ], (err, results) => {
+                    if (err) {
+                        return callback();
+                    }
+                    return callback(null, results.length > 0);
+                });
+            },
+            existsAsync: function () {
+                return new Promise((resolve, reject) => {
+                    this.exists((err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            },
+            create: function (callback) {
+                return self.execute(`CREATE DATABASE ${self.escapeName(name)};`, [], (err, results) => {
+                    if (err) {
+                        return callback();
+                    }
+                    return callback(null, results);
+                });
+            },
+            createAsync: function (fields) {
+                return new Promise((resolve, reject) => {
+                    this.create(fields, (err, res) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(res);
+                    });
+                });
+            }
+        }
+     }
 
 }
 
