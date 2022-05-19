@@ -10,7 +10,7 @@
     "url": "https://github.com/themost-framework/themost-adapters.git"
   },
   "scripts": {
-    "test": "jasmine",
+    "test": "nyc jasmine",
     "build": "rimraf dist && rollup --config rollup.config.js"
   },
   "keywords": [
@@ -55,6 +55,7 @@
     "eslint": "^8.15.0",
     "jasmine": "^4.1.0",
     "jasmine-spec-reporter": "^7.0.0",
+    "nyc": "^15.1.0",
     "rimraf": "^3.0.2",
     "rollup": "^2.73.0",
     "rollup-plugin-dts": "^4.2.1",

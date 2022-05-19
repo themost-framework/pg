@@ -1,6 +1,7 @@
 # tests
 spec
 babel.config.js
+.nycrc.json
 
 # eslint
 .eslintrc
