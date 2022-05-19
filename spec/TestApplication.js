@@ -1,7 +1,7 @@
 // eslint-disable-next-line no-unused-vars
-import {DataApplication, DataConfigurationStrategy, NamedDataContext, DataCacheStrategy, DataContext} from '@themost/data';
+import {DataApplication, DataConfigurationStrategy, NamedDataContext, DataCacheStrategy, DataContext, ODataModelBuilder, ODataConventionModelBuilder} from '@themost/data';
 import { createInstance } from '../src';
-import sqlite from '@themost/sqlite';
+import { TraceUtils } from '@themost/common';
 
 const testConnectionOptions = {
     'server': process.env.POSTGRES_HOST,
@@ -131,6 +131,41 @@ class TestApplication extends DataApplication {
                 });
             });
         });
+    }
+
+    async tryUpgrade() {
+        let context;
+        try {
+            this.configuration.useStrategy(ODataModelBuilder, ODataConventionModelBuilder);
+            context = this.createContext();
+            const builder = this.configuration.getStrategy(ODataModelBuilder);
+            const schema = await builder.getEdm();
+            const entityTypes = schema.entityType.filter((item) => {
+                return item.abstract ? false : true;
+            });
+            await context.executeInTransactionAsync(async () => {
+                for (let entityType of entityTypes) {
+                    TraceUtils.debug(`Upgrading ${entityType.name}`);
+                    await new Promise((resolve, reject) => {
+                        const model = context.model(entityType.name);
+                        if (model.abstract) {
+                            return resolve();
+                        }
+                        model.migrate(function (err) {
+                            if (err) {
+                                return reject(err);
+                            }
+                            return resolve();
+                        });
+                    });
+                }
+            });
+            await context.finalizeAsync();
+        } catch (error) {
+            if (context) {
+                await context.finalizeAsync();
+            }
+        }
     }
 
 }
