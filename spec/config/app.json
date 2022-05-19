@@ -15,16 +15,6 @@
         }
     },
     "adapterTypes": [
-        {
-            "name": "SQLite Data Adapter",
-            "invariantName": "sqlite",
-            "type": "@themost/sqlite"
-        },
-        {
-            "name": "PostgreSQL Data Adapter",
-            "invariantName": "postgres",
-            "type": "@themost/pg"
-        }
     ],
     "adapters": [
         {
@@ -33,17 +23,6 @@
             "default": false,
             "options": {
                 "database": "db/local.db"
-            }
-        },
-        {
-            "name": "target",
-            "invariantName": "postgres",
-            "default": true,
-            "options": {
-                "server":"localhost",
-                "port": 5432,
-                "user":"postgres",
-                "database":"test_db"
             }
         }
     ]

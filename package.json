@@ -10,7 +10,7 @@
     "url": "https://github.com/themost-framework/themost-adapters.git"
   },
   "scripts": {
-    "test": "jest",
+    "test": "jasmine",
     "build": "rimraf dist && rollup --config rollup.config.js"
   },
   "keywords": [
@@ -48,11 +48,13 @@
     "@rollup/plugin-commonjs": "^22.0.0",
     "@themost/data": "^2.6.34",
     "@themost/peers": "^1.0.2",
+    "@themost/sqlite": "^2.6.4",
     "@types/jest": "^27.4.1",
     "@types/sprintf-js": "^1.1.2",
     "dotenv": "^16.0.0",
     "eslint": "^8.15.0",
-    "jest": "^27.5.1",
+    "jasmine": "^4.1.0",
+    "jasmine-spec-reporter": "^7.0.0",
     "rimraf": "^3.0.2",
     "rollup": "^2.73.0",
     "rollup-plugin-dts": "^4.2.1",

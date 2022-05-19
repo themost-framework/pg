@@ -1,6 +1,5 @@
 # tests
 spec
-jest.config.js
 babel.config.js
 
 # eslint

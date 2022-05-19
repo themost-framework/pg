@@ -110,19 +110,25 @@ class PostgreSQLAdapter {
      * @param {function(Error=)} callback
      */
     disconnect(callback) {
-        if (typeof this.rawConnection === 'undefined' || this.rawConnection === null) {
+        if (this.rawConnection == null) {
             return callback();
         }
         try {
             //try to close connection
-            this.rawConnection.end();
-            if (this.rawConnection.connection && this.rawConnection.connection.stream) {
-                if (typeof this.rawConnection.connection.stream.destroy === 'function') {
-                    this.rawConnection.connection.stream.destroy();
+            this.rawConnection.end((err) => {
+                if (err) {
+                    TraceUtils.error('An error occurred while closing database connection');
+                    TraceUtils.error(err);
                 }
-            }
-            this.rawConnection = null;
-            return callback();
+                this.rawConnection = null;
+                return callback();
+            });
+            // if (this.rawConnection.connection && this.rawConnection.connection.stream) {
+            //     if (typeof this.rawConnection.connection.stream.destroy === 'function') {
+            //         this.rawConnection.connection.stream.destroy();
+            //     }
+            // }
+            
         }
         catch (err) {
             TraceUtils.error('An error occurred while trying to close database connection.');
@@ -960,16 +966,13 @@ class PostgreSQLAdapter {
                             self.table(migration.appliesTo).changeAsync(updateColumns);
                         }
                     }
-                    await self.execute('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)',
+                    await self.executeAsync('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)',
                     [
                         migration.appliesTo,
                         migration.model,
                         migration.version,
                         migration.description
                     ]);
-                    Object.assign(migration, {
-                        updated: true
-                    });
                     return 1; 
                 })().then((result) => {
                     return callback(null, result);

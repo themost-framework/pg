@@ -1,6 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 import {DataApplication, DataConfigurationStrategy, NamedDataContext, DataCacheStrategy, DataContext} from '@themost/data';
 import { createInstance } from '../src';
+import sqlite from '@themost/sqlite';
 
 const testConnectionOptions = {
     'server': process.env.POSTGRES_HOST,
