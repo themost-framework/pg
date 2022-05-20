@@ -1,6 +1,6 @@
 import { TestApplication } from './TestApplication';
 
-fdescribe('PostgreSQLFormatter', () => {
+describe('PostgreSQLFormatter', () => {
     /**
      * @type {TestApplication}
      */
@@ -8,7 +8,8 @@ fdescribe('PostgreSQLFormatter', () => {
     beforeAll(async () => {
         app = new TestApplication(__dirname);
         await app.tryCreateDatabase();
-        await app.tryUpgrade();
+        await app.trySetData();
+        
     });
     beforeEach(async () => {
         //

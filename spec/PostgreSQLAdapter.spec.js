@@ -24,7 +24,7 @@ describe('PostgreSQLAdapter', () => {
         await app.executeInTestTranscaction(async (context) => {
             let exists = await context.db.database('a_test_database').existsAsync();
             expect(exists).toBeFalsy();
-            exists = await context.db.database(process.env.POSTGRES_DB).existsAsync();
+            exists = await context.db.database('test_db').existsAsync();
             expect(exists).toBeTruthy();
         });
     });

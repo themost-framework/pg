@@ -1,13 +1,16 @@
 // eslint-disable-next-line no-unused-vars
 import {DataApplication, DataConfigurationStrategy, NamedDataContext, DataCacheStrategy, DataContext, ODataModelBuilder, ODataConventionModelBuilder} from '@themost/data';
-import { createInstance } from '../src';
-import { TraceUtils } from '@themost/common';
+import { createInstance, PostgreSQLFormatter } from '../src';
+import { TraceUtils, LangUtils } from '@themost/common';
+import { QueryExpression } from '@themost/query';
+import { SqliteAdapter } from '@themost/sqlite';
+import path from 'path';
 
 const testConnectionOptions = {
     'server': process.env.POSTGRES_HOST,
     'port': parseInt(process.env.POSTGRES_PORT, 10),
     'user': process.env.POSTGRES_USER,
-    'database': process.env.POSTGRES_DB
+    'database': 'test_db'
 };
 
 const masterConnectionOptions = {
@@ -15,6 +18,10 @@ const masterConnectionOptions = {
     'port': parseInt(process.env.POSTGRES_PORT, 10),
     'user': process.env.POSTGRES_USER,
     'database': 'postgres'
+};
+
+const sourceConnectionOptions = {
+    database: path.resolve(__dirname, 'db/local.db')
 };
 
 class CancelTransactionError extends Error {
@@ -165,6 +172,76 @@ class TestApplication extends DataApplication {
             if (context) {
                 await context.finalizeAsync();
             }
+            throw error;
+        }
+    }
+
+    async trySetData() {
+        let context;
+        try {
+            this.configuration.useStrategy(ODataModelBuilder, ODataConventionModelBuilder);
+            context = this.createContext();
+            const builder = this.configuration.getStrategy(ODataModelBuilder);
+            const schema = await builder.getEdm();
+            const entityTypes = schema.entityType.filter((item) => {
+                return item.abstract ? false : true;
+            });
+            const sourceAdapter = new SqliteAdapter(sourceConnectionOptions);
+            for (let entityType of entityTypes) {
+                TraceUtils.log(`Upgrading ${entityType.name}`);
+                await new Promise((resolve, reject) => {
+                    const model = context.model(entityType.name);
+                    if (model.abstract) {
+                        return resolve();
+                    }
+                    model.migrate(function (err) {
+                        if (err) {
+                            return reject(err);
+                        }
+                        (async function () {
+                            const sourceTableExists = await sourceAdapter.table(model.sourceAdapter).existsAsync();
+                            if (sourceTableExists) {
+                                // get source data
+                                let results = await sourceAdapter.executeAsync(`SELECT * FROM "${model.sourceAdapter}"`);
+                                if (results.length > 0) {
+                                    await context.db.executeAsync(`DELETE FROM "${model.sourceAdapter}" WHERE 1=1`);
+                                    const formatter = new PostgreSQLFormatter();
+                                    // get columns of type boolean
+                                    // data should be update to true/false
+                                    // because of an error occurred while trying to insert an integer value to a field of type boolean
+                                    const booleanAttributes = model.attributes.filter((attribute) => attribute.type === 'Boolean');
+                                    for (let result of results) {
+                                        // modify data
+                                        booleanAttributes.forEach((attribute) => {
+                                            if (Object.prototype.hasOwnProperty.call(result, attribute.name)) {
+                                                result[attribute.name] = LangUtils.parseBoolean(result[attribute.name]);
+                                            }
+                                        });
+                                        const sql = formatter.format(new QueryExpression().insert(result).into(model.sourceAdapter));
+                                        // and execute
+                                        await context.db.executeAsync(sql);
+                                    }
+                                    const key = model.getAttribute(model.primaryKey);
+                                    if (key.type === 'Counter') {
+                                        // reset sequence
+                                        await context.db.executeAsync(`select setval(pg_get_serial_sequence('"${model.sourceAdapter}"', '${key.name}'), (select max("${key.name}") from "${model.sourceAdapter}")); `);
+                                    }
+                                }
+                            }
+                        })().then(() => {
+                            return resolve();
+                        }).catch((err) => {
+                            return reject(err);
+                        });
+                    });
+                });
+            }
+            await context.finalizeAsync();
+        } catch (error) {
+            if (context) {
+                await context.finalizeAsync();
+            }
+            throw error;
         }
     }
 
