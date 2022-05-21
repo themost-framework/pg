@@ -181,6 +181,17 @@ class TestApplication extends DataApplication {
         try {
             this.configuration.useStrategy(ODataModelBuilder, ODataConventionModelBuilder);
             context = this.createContext();
+            // validate if the operation has been already run
+            const exists1 = await context.db.table('migrations').existsAsync();
+            if (exists1 === true) {
+                const alreadyApplied = await context.db.executeAsync(
+                    new QueryExpression().select('version').from('migrations')
+                        .where('appliesTo').equal('SetData').and('version').equal('1.0')
+                    );
+                if (alreadyApplied.length > 0) {
+                    return;
+                }
+            }
             const builder = this.configuration.getStrategy(ODataModelBuilder);
             const schema = await builder.getEdm();
             const entityTypes = schema.entityType.filter((item) => {
@@ -236,6 +247,10 @@ class TestApplication extends DataApplication {
                     });
                 });
             }
+            await context.db.executeAsync(new QueryExpression().insert({
+                appliesTo: 'SetData',
+                version: '1.0'
+            }).into('migrations'));
             await context.finalizeAsync();
         } catch (error) {
             if (context) {
