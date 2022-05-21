@@ -4,6 +4,7 @@ babel.config.js
 .nycrc.json
 coverage
 .nyc_output
+.env
 
 # eslint
 .eslintrc
