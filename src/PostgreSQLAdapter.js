@@ -939,7 +939,7 @@ class PostgreSQLAdapter {
                         await self.table(migration.appliesTo).createAsync(migration.add);
                     } else {
                         // get columns
-                        const columns = await self.table(migration.appliesTo).createAsync(migration.add);
+                        const columns = await self.table(migration.appliesTo).columnsAsync(migration.add);
                         const addColumns = [];
                         const updateColumns = [];
                         for (const field of migration.add) {
@@ -964,6 +964,12 @@ class PostgreSQLAdapter {
                         }
                         if (updateColumns.length > 0) {
                             self.table(migration.appliesTo).changeAsync(updateColumns);
+                        }
+                    }
+                    if (Array.isArray(migration.indexes)) {
+                        const tableIndexes = self.indexes(migration.appliesTo);
+                        for (const index of migration.indexes) {
+                            await tableIndexes.createAsync(index.name, index.columns);
                         }
                     }
                     await self.executeAsync('INSERT INTO migrations("appliesTo", "model", "version", "description") VALUES (?,?,?,?)',
