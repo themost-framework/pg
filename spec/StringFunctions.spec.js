@@ -62,7 +62,7 @@ describe('StringFunctions', () => {
             expect(items).toBeInstanceOf(Array);
             expect(items.length).toBeGreaterThan(0);
             for (const item of items) {
-                expect(item.name.toLowerCase()).toEqual('APPLE IPAD AIR');
+                expect(item.name.toUpperCase()).toEqual('APPLE IPAD AIR');
             }
         });
     });

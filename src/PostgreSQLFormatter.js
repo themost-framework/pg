@@ -161,12 +161,40 @@ class PostgreSQLFormatter extends SqlFormatter {
         return sprintf('ROUND(%s::numeric, %s)', this.escape(p0), this.escape(p1)); 
     }
 
-    $day(p0) { return sprintf('DATE_PART(\'day\',%s)', this.escape(p0)); }
-    $month(p0) { return sprintf('DATE_PART(\'month\',%s)', this.escape(p0)); }
-    $year(p0) { return sprintf('DATE_PART(\'year\',%s)', this.escape(p0)); }
-    $hour(p0) { return sprintf('HOUR_TZ(%s::timestamp with time zone)', this.escape(p0)); }
-    $minute(p0) { return sprintf('DATE_PART(\'minute\',%s)', this.escape(p0)); }
-    $second(p0) { return sprintf('DATE_PART(\'second\',%s)', this.escape(p0)); }
+    $day(p0) {
+        return sprintf('DATE_PART(\'day\',%s)', this.escape(p0));
+    }
+
+    $dayOfMonth(p0) {
+        return sprintf('DATE_PART(\'day\',%s)', this.escape(p0));
+    }
+
+    $month(p0) {
+        return sprintf('DATE_PART(\'month\',%s)', this.escape(p0));
+    }
+
+    $year(p0) {
+        return sprintf('DATE_PART(\'year\',%s)', this.escape(p0));
+    }
+    $hour(p0) {
+        return sprintf('DATE_PART(\'hour\',%s)', this.escape(p0));
+    }
+
+    $minute(p0) {
+        return sprintf('DATE_PART(\'minute\',%s)', this.escape(p0));
+    }
+
+    $minutes(p0) {
+        return this.$minute(p0);
+    }
+
+    $second(p0) {
+        return sprintf('DATE_PART(\'second\',%s)', this.escape(p0));
+    }
+
+    $seconds(p0) {
+        return this.$second(p0);
+    }
 
     $date(p0) {
         return sprintf('CAST(%s AS DATE)', this.escape(p0));
