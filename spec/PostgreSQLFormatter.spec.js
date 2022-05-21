@@ -1,3 +1,4 @@
+import { PostgreSQLFormatter } from '../src';
 import { TestApplication } from './TestApplication';
 
 describe('PostgreSQLFormatter', () => {
@@ -36,6 +37,14 @@ describe('PostgreSQLFormatter', () => {
             expect(item).toBeTruthy();
             expect(item.alternateName).toEqual('ActiveActionStatus');
         });
+    });
+
+    it('should escape constant', async () => {
+        const formatter = new PostgreSQLFormatter();
+        expect(formatter.escapeConstant(10.45)).toEqual('10.45::float');
+        expect(formatter.escapeConstant('test')).toEqual('\'test\'::text');
+        expect(formatter.escapeConstant(true)).toEqual('true::bool');
+        expect(formatter.escapeConstant(new Date('2019-05-15 12:45:00'))).toEqual('\'2019-05-15 12:45:00.000\'::timestamp');
     });
 
     it('should should use limit select', async () => {

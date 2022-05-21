@@ -78,6 +78,17 @@ describe('StringFunctions', () => {
         });
     });
 
+    it('should use length()', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            let items = await context.model('Product')
+                .asQueryable().where('name').length().equal(14).getItems();
+            expect(items).toBeInstanceOf(Array);
+            for (const item of items) {
+                expect(item.name.length).toEqual(14);
+            }
+        });
+    });
+
     it('should use substr()', async () => {
         await app.executeInTestTranscaction(async (context) => {
             let items = await context.model('Product')
