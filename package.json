@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/themost-framework/themost-adapters.git"
+    "url": "https://github.com/themost-framework/pg.git"
   },
   "scripts": {
     "test": "nyc jasmine",
@@ -26,9 +26,9 @@
   "author": "Kyriakos Barbounakis <k.barbounakis@gmail.com>",
   "license": "BSD-3-Clause",
   "bugs": {
-    "url": "https://github.com/themost-framework/themost-adapters/issues"
+    "url": "https://github.com/themost-framework/pg/issues"
   },
-  "homepage": "https://github.com/themost-framework/themost-adapters",
+  "homepage": "https://github.com/themost-framework/pg",
   "dependencies": {
     "pg": "^8.7.3",
     "pg-native": "^3.0.0",
