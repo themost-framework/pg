@@ -15,7 +15,7 @@ export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBa
     execute(query: any, values: any, callback: (err: Error, result?: any) => void): void;
     executeAsync(query: any, values: any): Promise<any>;
     selectIdentity(entity: string, attribute: string, callback?: (err?: Error,result?: any) => void): void;
-    selectIdentityAsync(entity: string, attribute: string): Promise<void>;
+    selectIdentityAsync(entity: string, attribute: string): Promise<any>;
     executeInTransaction(func: () => void, callback: (err?: Error) => void): void;
     executeInTransactionAsync(func: () => Promise<void>): Promise<void>;
     migrate(obj: DataAdapterMigration, callback: (err: Error, result?: any) => void): void;
