@@ -401,6 +401,22 @@ class PostgreSQLAdapter {
     }
 
     /**
+     * @param {string} entity 
+     * @param {string} attribute 
+     * @returns Promise<any>
+     */
+     selectIdentityAsync(entity, attribute) {
+        return new Promise((resolve, reject) => {
+            return this.selectIdentity(entity, attribute, (err, res) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(res);
+            });
+        });
+    }
+
+    /**
      * Executes an operation against database and returns the results.
      * @param {DataModelBatch} batch
      * @param {Function} callback
