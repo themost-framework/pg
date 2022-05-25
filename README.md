@@ -38,7 +38,21 @@ Register PostgreSQL adapter on app.json as follows:
               "database":"db"
             }
     }
-}
+} 
 
-If you are intended to use PostgreSQL adapter as the default database adapter set the property "default" to true. 
+## Testing
+
+Clone project and create a `.env` file to set testing environment variables
+
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_USER=postgres
+    DB_PASSWORD=pass
+    NODE_ENV=development
+
+(*) DB_PASSWORD is optional
+
+Execute `npm test`. 
+
+The operation will create a new test database `test_db` with sample data that is going to be used for testing adapter.
 

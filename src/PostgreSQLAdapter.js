@@ -1006,6 +1006,20 @@ class PostgreSQLAdapter {
     }
 
     /**
+     * @param {DataAdapterMigration} obj
+     */
+     migrateAsync(obj) {
+        return new Promise((resolve, reject) => {
+            this.migrate(obj, (err, res) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(res);
+            });
+        });
+    }
+
+    /**
      * Table indexes helper
      * @param {string} name 
      */
