@@ -52,6 +52,13 @@ Clone project and create a `.env` file to set testing environment variables
 
 (*) DB_PASSWORD is optional
 
+If you are using [Gitpod](https://www.gitpod.io/) create a `.env` file and set `DB_USER=gitpod`
+
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_USER=gitpod
+    NODE_ENV=development
+
 Execute `npm test`. 
 
 The operation will create a new test database `test_db` with sample data that is going to be used for testing adapter.

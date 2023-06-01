@@ -31,7 +31,6 @@
   "homepage": "https://github.com/themost-framework/pg",
   "dependencies": {
     "pg": "^8.7.3",
-    "pg-native": "^3.0.0",
     "sprintf-js": "^1.1.2"
   },
   "peerDependencies": {
@@ -46,9 +45,9 @@
     "@babel/register": "^7.17.0",
     "@rollup/plugin-babel": "^5.3.1",
     "@rollup/plugin-commonjs": "^22.0.0",
-    "@themost/data": "^2.6.34",
+    "@themost/data": "^2.9.8",
     "@themost/peers": "^1.0.2",
-    "@themost/sqlite": "^2.6.4",
+    "@themost/sqlite": "^2.6.13",
     "@types/jest": "^27.4.1",
     "@types/sprintf-js": "^1.1.2",
     "dotenv": "^16.0.0",
