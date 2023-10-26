@@ -4,9 +4,12 @@ import { QueryExpression, QueryField, SqlUtils } from '@themost/query';
 import { TraceUtils } from '@themost/common';
 import { PostgreSQLFormatter } from './PostgreSQLFormatter';
 import { sprintf } from 'sprintf-js';
+import { LangUtils } from '@themost/common';
+
+const parseInteger = LangUtils.parseInt;
 
 pg.types.setTypeParser(20, function(val) {
-    return val === null ? null : parseInt(val);
+    return val === null ? null : parseInteger(val);
 });
 
 pg.types.setTypeParser(1700, function(val) {
@@ -376,7 +379,7 @@ class PostgreSQLAdapter {
                         if (err) { return callback.call(self, err); }
                         let value = 1;
                         if (result.length > 0) {
-                            value = parseInt(result[0][attribute]) + 1;
+                            value = parseInteger(result[0][attribute]) + 1;
                         }
                         self.execute('INSERT INTO increment_id(entity, attribute, value) VALUES (?,?,?)', [entity, attribute, value], function (err) {
                             //throw error if any
@@ -388,7 +391,7 @@ class PostgreSQLAdapter {
                 }
                 else {
                     //get new increment value
-                    const value = parseInt(result[0].value) + 1;
+                    const value = parseInteger(result[0].value) + 1;
                     self.execute('UPDATE increment_id SET value=? WHERE id=?', [value, result[0].id], function (err) {
                         //throw error if any
                         if (err) { return callback.call(self, err); }
@@ -434,8 +437,8 @@ class PostgreSQLAdapter {
      * @returns {string}
      */
     formatType(field, format) {
-        const size = parseInt(field.size);
-        const scale = parseInt(field.scale);
+        const size = parseInteger(field.size);
+        const scale = parseInteger(field.scale);
         let s = 'varchar(512) NULL';
         const type = field.type;
         switch (type) {
