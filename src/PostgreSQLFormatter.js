@@ -199,6 +199,32 @@ class PostgreSQLFormatter extends SqlFormatter {
     $date(p0) {
         return sprintf('CAST(%s AS DATE)', this.escape(p0));
     }
+
+    $toString(p0) {
+        return sprintf('CAST(%s AS VARCHAR)', this.escape(p0));
+    }
+
+    isComparison(obj) {
+        const key = Object.key(obj);
+        return (/^\$(eq|ne|lt|lte|gt|gte|in|nin|text|regex)$/g.test(key));
+    }
+    isLogical(obj) {
+        const key = Object.key(obj);
+        return (/^\$(and|or|not|nor)$/g.test(key));
+    }
+
+    $cond(ifExpr, thenExpr, elseExpr) {
+        // validate ifExpr which should an instance of QueryExpression or a comparison expression
+        let ifExpression;
+        if (instanceOf(ifExpr, QueryExpression)) {
+            ifExpression = this.formatWhere(ifExpr.$where);
+        } else if (this.isComparison(ifExpr) || this.isLogical(ifExpr)) {
+            ifExpression = this.formatWhere(ifExpr);
+        } else {
+            throw new Error('Condition parameter should be an instance of query or comparison expression');
+        }
+        return sprintf('(CASE %s WHEN TRUE THEN %s ELSE %s END)', ifExpression, this.escape(thenExpr), this.escape(elseExpr));
+    }
 }
 
 export {
