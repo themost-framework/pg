@@ -216,7 +216,7 @@ class PostgreSQLFormatter extends SqlFormatter {
     $cond(ifExpr, thenExpr, elseExpr) {
         // validate ifExpr which should an instance of QueryExpression or a comparison expression
         let ifExpression;
-        if (instanceOf(ifExpr, QueryExpression)) {
+        if (ifExpr instanceof QueryExpression) {
             ifExpression = this.formatWhere(ifExpr.$where);
         } else if (this.isComparison(ifExpr) || this.isLogical(ifExpr)) {
             ifExpression = this.formatWhere(ifExpr);
