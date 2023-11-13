@@ -1,5 +1,5 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
-import { SqlFormatter } from '@themost/query';
+import { SqlFormatter, QueryExpression } from '@themost/query';
 import { sprintf } from 'sprintf-js';
 
 const SINGLE_QUOTE_ESCAPE ='\'\'';
