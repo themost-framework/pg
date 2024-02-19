@@ -1,12 +1,12 @@
 import { DataAdapterBase, DataAdapterBaseHelper, DataAdapterDatabase, DataAdapterIndexes, DataAdapterMigration, DataAdapterTable, DataAdapterView } from '@themost/common';
 
 export declare interface DataAdapterTables {
-    list(callback: (err: Error, result: { name: string }[]) => void): void;
+    list(callback: (err: Error, result: { name: string, owner?: string, schema?: string }[]) => void): void;
     listAsync(): Promise<{ name: string, owner?: string, schema?: string }[]>;
 }
 
 export declare interface DataAdapterViews {
-    list(callback: (err: Error, result: { name: string }[]) => void): void;
+    list(callback: (err: Error, result: { name: string, owner?: string, schema?: string }[]) => void): void;
     listAsync(): Promise<{ name: string, owner?: string, schema?: string }[]>;
 }
 
