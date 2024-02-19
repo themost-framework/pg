@@ -1,5 +1,15 @@
 import { DataAdapterBase, DataAdapterBaseHelper, DataAdapterDatabase, DataAdapterIndexes, DataAdapterMigration, DataAdapterTable, DataAdapterView } from '@themost/common';
 
+export declare interface DataAdapterTables {
+    list(callback: (err: Error, result: { name: string, owner?: string, schema?: string }[]) => void): void;
+    listAsync(): Promise<{ name: string, owner?: string, schema?: string }[]>;
+}
+
+export declare interface DataAdapterViews {
+    list(callback: (err: Error, result: { name: string, owner?: string, schema?: string }[]) => void): void;
+    listAsync(): Promise<{ name: string, owner?: string, schema?: string }[]>;
+}
+
 export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBaseHelper {
     constructor(options?: any);
     table(name: string): DataAdapterTable;
@@ -21,4 +31,6 @@ export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBa
     migrate(obj: DataAdapterMigration, callback: (err: Error, result?: any) => void): void;
     migrateAsync(obj: DataAdapterMigration): Promise<any>;
     createView(name: string, query: any, callback: (err: Error) => void): void;
+    tables(): DataAdapterTables;
+    views(): DataAdapterViews;
 }
