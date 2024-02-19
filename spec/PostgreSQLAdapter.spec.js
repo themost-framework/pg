@@ -226,4 +226,26 @@ describe('PostgreSQLAdapter', () => {
             await db.executeAsync(`DROP TABLE ${new PostgreSQLFormatter().escapeName('Table1')}`);
         });
     });
+
+    it('should should list tables', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            const db = context.db;
+            const tables = await db.tables().listAsync();
+            expect(tables).toBeInstanceOf(Array);
+            expect(tables.length).toBeTruthy();
+            const table = tables.find((item) => item.name === 'ThingBase');
+            expect(table).toBeTruthy();
+        });
+    });
+
+    it('should should list views', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            const db = context.db;
+            const views = await db.views().listAsync();
+            expect(views).toBeInstanceOf(Array);
+            expect(views.length).toBeTruthy();
+            const view = views.find((item) => item.name === 'ThingData');
+            expect(view).toBeTruthy();
+        });
+    });
 });

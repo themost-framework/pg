@@ -1275,6 +1275,59 @@ class PostgreSQLAdapter {
             }
         }
      }
+     tables() {
+        const self = this;
+        return {
+            list(callback) {
+                return self.execute(`
+SELECT "tablename" AS "name", tableowner AS "owner", "schemaname" AS "schema"
+FROM "pg_catalog"."pg_tables" WHERE "schemaname" <> 'pg_catalog' AND "schemaname" <> 'information_schema'
+                `, [], (err, results) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback(null, results);
+                });
+            },
+            listAsync() {
+                return new Promise((resolve, reject) => {
+                    return this.list((err, results) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(results);
+                    })
+                });
+            }
+        }
+     }
+
+     views() {
+        const self = this;
+        return {
+            list(callback) {
+                return self.execute(`
+SELECT "viewname" AS "name", "viewowner" AS "owner", "schemaname" AS "schema"
+FROM "pg_catalog"."pg_views" WHERE "schemaname" <> 'pg_catalog' AND "schemaname" <> 'information_schema'
+                `, [], (err, results) => {
+                    if (err) {
+                        return callback(err);
+                    }
+                    return callback(null, results);
+                });
+            },
+            listAsync() {
+                return new Promise((resolve, reject) => {
+                    return this.list((err, results) => {
+                        if (err) {
+                            return reject(err);
+                        }
+                        return resolve(results);
+                    })
+                });
+            }
+        }
+     }
 
 }
 
