@@ -177,11 +177,11 @@ class PostgreSQLFormatter extends SqlFormatter {
         return sprintf('DATE_PART(\'year\',(%s)::date)', this.escape(p0));
     }
     $hour(p0) {
-        return sprintf('DATE_PART(\'hour\',(%s)::date)', this.escape(p0));
+        return sprintf('DATE_PART(\'hour\',(%s)::timestamp)', this.escape(p0));
     }
 
     $minute(p0) {
-        return sprintf('DATE_PART(\'minute\',(%s)::date)', this.escape(p0));
+        return sprintf('DATE_PART(\'minute\',(%s)::timestamp)', this.escape(p0));
     }
 
     $minutes(p0) {
@@ -189,7 +189,7 @@ class PostgreSQLFormatter extends SqlFormatter {
     }
 
     $second(p0) {
-        return sprintf('DATE_PART(\'second\',(%s)::date)', this.escape(p0));
+        return sprintf('DATE_PART(\'second\',(%s)::timestamp)', this.escape(p0));
     }
 
     $seconds(p0) {
