@@ -181,6 +181,9 @@ class PostgreSQLAdapter {
      */
     execute(query, values, callback) {
         const self = this;
+        /**
+         * @type {string|null}
+         */
         let sql = null;
         try {
 
@@ -189,7 +192,7 @@ class PostgreSQLAdapter {
                 sql = query;
             }
             else {
-                //format query expression or any object that may be act as query expression
+                //format query expression or any object that may act as query expression
                 const formatter = new PostgreSQLFormatter();
                 sql = formatter.format(query);
             }
@@ -421,7 +424,7 @@ class PostgreSQLAdapter {
 
     /**
      * Executes an operation against database and returns the results.
-     * @param {DataModelBatch} batch
+     * @param {import('@themost/data').DataModelBatch} batch
      * @param {Function} callback
      * @deprecated DataAdapter.executeBatch() is obsolete. Use DataAdapter.executeInTransaction() instead.
      */
@@ -504,6 +507,9 @@ class PostgreSQLAdapter {
             case 'Short':
                 s = 'smallint';
                 break;
+            case 'Json':
+                s = 'jsonb';
+                break;
             default:
                 s = 'integer';
                 break;
@@ -527,7 +533,9 @@ class PostgreSQLAdapter {
     }
 
     /**
+     * @param name {string}
      * @param query {QueryExpression}
+     * @param callback {function(Error=)}
      */
     createView(name, query, callback) {
         return this.view(name).create(query, (err) => {
@@ -953,7 +961,7 @@ class PostgreSQLAdapter {
                         return -1; 
                     }
                     exists = await self.table(migration.appliesTo).existsAsync();
-                    if (exists == false) {
+                    if (exists === false) {
                         // get columns
                         await self.table(migration.appliesTo).createAsync(migration.add);
                     } else {
@@ -979,10 +987,10 @@ class PostgreSQLAdapter {
                              }
                         }
                         if (addColumns.length > 0) {
-                            self.table(migration.appliesTo).addAsync(addColumns);
+                            await self.table(migration.appliesTo).addAsync(addColumns);
                         }
                         if (updateColumns.length > 0) {
-                            self.table(migration.appliesTo).changeAsync(updateColumns);
+                            await self.table(migration.appliesTo).changeAsync(updateColumns);
                         }
                     }
                     if (Array.isArray(migration.indexes)) {
@@ -1009,7 +1017,7 @@ class PostgreSQLAdapter {
     }
 
     /**
-     * @param {DataAdapterMigration} obj
+     * @param {import('@themost/data').DataAdapterMigration} obj
      */
      migrateAsync(obj) {
         return new Promise((resolve, reject) => {
@@ -1256,7 +1264,8 @@ class PostgreSQLAdapter {
                 });
             },
             create: function (callback) {
-                return self.execute(`CREATE DATABASE ${self.escapeName(name)};`, [], (err, results) => {
+                const formatter = new PostgreSQLFormatter();
+                return self.execute(`CREATE DATABASE ${formatter.escapeName(name)};`, [], (err, results) => {
                     if (err) {
                         return callback();
                     }

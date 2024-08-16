@@ -162,26 +162,26 @@ class PostgreSQLFormatter extends SqlFormatter {
     }
 
     $day(p0) {
-        return sprintf('DATE_PART(\'day\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'day\',(%s)::date)', this.escape(p0));
     }
 
     $dayOfMonth(p0) {
-        return sprintf('DATE_PART(\'day\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'day\',(%s)::date)', this.escape(p0));
     }
 
     $month(p0) {
-        return sprintf('DATE_PART(\'month\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'month\',(%s)::date)', this.escape(p0));
     }
 
     $year(p0) {
-        return sprintf('DATE_PART(\'year\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'year\',(%s)::date)', this.escape(p0));
     }
     $hour(p0) {
-        return sprintf('DATE_PART(\'hour\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'hour\',(%s)::date)', this.escape(p0));
     }
 
     $minute(p0) {
-        return sprintf('DATE_PART(\'minute\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'minute\',(%s)::date)', this.escape(p0));
     }
 
     $minutes(p0) {
@@ -189,7 +189,7 @@ class PostgreSQLFormatter extends SqlFormatter {
     }
 
     $second(p0) {
-        return sprintf('DATE_PART(\'second\',%s)', this.escape(p0));
+        return sprintf('DATE_PART(\'second\',(%s)::date)', this.escape(p0));
     }
 
     $seconds(p0) {
@@ -224,6 +224,27 @@ class PostgreSQLFormatter extends SqlFormatter {
             throw new Error('Condition parameter should be an instance of query or comparison expression');
         }
         return sprintf('(CASE %s WHEN TRUE THEN %s ELSE %s END)', ifExpression, this.escape(thenExpr), this.escape(elseExpr));
+    }
+
+    /**
+     * @param {*} expr
+     * @return {string}
+     */
+    $jsonGet(expr) {
+        if (typeof expr.$name !== 'string') {
+            throw new Error('Invalid json expression. Expected a string');
+        }
+        const parts = expr.$name.split('.');
+        const extract = this.escapeName(parts.splice(0, 2).join('.'));
+        return `${extract}->>'${parts.join('.')}'`;
+    }
+
+    /**
+     * @param {*} expr
+     * @return {string}
+     */
+    $jsonArray(expr) {
+        return `json_each(${this.escapeName(expr)})`;
     }
 }
 
