@@ -2,4 +2,8 @@ image:
   file: .gitpod.dockerfile
 
 tasks:
-  - init: npm install
+  - init: |
+      npm install &&
+      echo -e "DB_HOST=localhost" >> .env &&
+      echo -e "DB_PORT=5432" >> .env &&
+      echo -e "DB_USER=gitpod" >> .env
