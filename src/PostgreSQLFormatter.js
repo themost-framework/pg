@@ -200,10 +200,6 @@ class PostgreSQLFormatter extends SqlFormatter {
         return sprintf('CAST(%s AS DATE)', this.escape(p0));
     }
 
-    $toString(p0) {
-        return sprintf('CAST(%s AS VARCHAR)', this.escape(p0));
-    }
-
     isComparison(obj) {
         const key = Object.key(obj);
         return (/^\$(eq|ne|lt|lte|gt|gte|in|nin|text|regex)$/g.test(key));
@@ -245,6 +241,63 @@ class PostgreSQLFormatter extends SqlFormatter {
      */
     $jsonArray(expr) {
         return `json_each(${this.escapeName(expr)})`;
+    }
+
+    $toString(expr) {
+        return sprintf('CAST(%s as VARCHAR)', this.escape(expr));
+    }
+
+    $toInt(expr) {
+        return sprintf('FLOOR(CAST(%s as DECIMAL(19,8)))', this.escape(expr));
+    }
+
+    $toDouble(expr) {
+        return this.$toDecimal(expr, 19, 8);
+    }
+
+    // noinspection JSCheckFunctionSignatures
+    /**
+     * @param {*} expr 
+     * @param {number=} precision 
+     * @param {number=} scale 
+     * @returns 
+     */
+    $toDecimal(expr, precision, scale) {
+        const p = typeof precision === 'number' ? Math.floor(precision) : 19;
+        const s = typeof scale === 'number' ? Math.floor(scale) : 8;
+        return sprintf('CAST(%s as DECIMAL(%s,%s))', this.escape(expr), p, s);
+    }
+
+    $toLong(expr) {
+        return sprintf('FLOOR(CAST(%s as DECIMAL(19,8)))', this.escape(expr));
+    }
+
+    $uuid() {
+        // todo::use gen_random_uuid () implemented at version 13
+        // https://www.postgresql.org/docs/13/functions-uuid.html
+        return 'md5(random()::text || clock_timestamp()::text)::uuid';
+    }
+
+    $toGuid(expr) {
+        return sprintf('MD5(%s)::uuid', this.escape(expr));
+    }
+
+    /**
+     * 
+     * @param {('date'|'datetime'|'timestamp')} type 
+     * @returns 
+     */
+    $getDate(type) {
+        switch (type) {
+            case 'date':
+                return 'CURRENT_DATE';
+            case 'datetime':
+                return 'CURRENT_TIMESTAMP::timestamp';
+            case 'timestamp':
+                return 'CURRENT_TIMESTAMP::timestamp with time zone';
+            default:
+                return 'CURRENT_TIMESTAMP::timestamp';
+        }
     }
 }
 
