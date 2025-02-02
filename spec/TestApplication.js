@@ -55,12 +55,10 @@ class TestApplication extends DataApplication {
         // add adapter type
         const name = 'PostgreSQL Data Adapter';
         const invariantName = 'postgres';
-        Object.assign(dataConfiguration.adapterTypes, {
-            postgres: {
-                name,
-                invariantName,
-                createInstance
-            }
+        dataConfiguration.adapterTypes.set(invariantName, {
+            name,
+            invariantName,
+            createInstance
         });
         dataConfiguration.adapters.push({
             name: 'master',
