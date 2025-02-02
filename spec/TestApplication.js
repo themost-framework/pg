@@ -92,6 +92,10 @@ class TestApplication extends DataApplication {
         }
     }
 
+    finalizeAsync() {
+        return this.finalize();
+    }
+
     /**
      * @param {TestContextFunction} func 
      */

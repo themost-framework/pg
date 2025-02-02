@@ -176,9 +176,9 @@ class PostgreSQLAdapter {
         return SqlUtils.format(query, values);
     }
 
-    @before(({target, args}, callback) => {
+    @after(({target, args}, callback) => {
         const [query, params] = args;
-        void target.executing.emit({
+        void target.executed.emit({
             target,
             query,
             params
@@ -188,9 +188,9 @@ class PostgreSQLAdapter {
             return callback(err);
         });
     })
-    @after(({target, args}, callback) => {
+    @before(({target, args}, callback) => {
         const [query, params] = args;
-        void target.executed.emit({
+        void target.executing.emit({
             target,
             query,
             params

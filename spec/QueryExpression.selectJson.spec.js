@@ -1,9 +1,10 @@
 // noinspection SpellCheckingInspection
 
-import {MemberExpression, MethodCallExpression, QueryEntity, QueryExpression} from '@themost/query';
+import {MemberExpression, MethodCallExpression, QueryEntity, QueryExpression, QueryField} from '@themost/query';
 import { PostgreSQLFormatter } from '@themost/pg';
 import SimpleOrderSchema from './config/models/SimpleOrder.json';
 import {TestApplication} from './TestApplication';
+import { TraceUtils } from '@themost/common';
 
 /**
  * @param { import('../src').SqliteAdapter } db
@@ -123,8 +124,9 @@ describe('SqlFormatter', () => {
         const {db} = context;
         await createSimpleOrders(db);
     });
-    beforeEach(async () => {
+    afterAll(async () => {
         await context.finalizeAsync();
+        await app.finalizeAsync();
     });
 
     it('should select json field', async () => {
@@ -311,5 +313,157 @@ describe('SqlFormatter', () => {
             }
         });
     });
+
+    it('should use jsonObject', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            const Orders = context.model('Order').silent();
+            const q = Orders.select(
+                'id', 'orderedItem', 'orderDate'
+            ).where('customer/description').equal('Eric Thomas');
+            const select = q.query.$select[Orders.viewAdapter];
+            select.push({
+                customer: {
+                    $jsonObject: [
+                        new QueryField('familyName').from('customer'), // field without alias
+                        new QueryField('givenName').from('customer').as('givenName'), // field with alias
+                        new QueryField({
+                            active: {
+                                $value: true
+                            }
+                        }) // field with value and alias
+                    ]
+                }
+            });
+            const items = await q.getItems();
+            expect(items).toBeTruthy();
+            for (const item of items) {
+                expect(item.customer).toBeTruthy();
+                expect(item.customer.familyName).toEqual('Thomas');
+                expect(item.customer.givenName).toEqual('Eric');
+            }
+        });
+    });
+
+    it('should use jsonObject in ad-hoc queries', async () => {
+        await app.executeInTestTranscaction(async (context) => {
+            const {viewAdapter: Orders} = context.model('Order');
+            const {viewAdapter: Customers} = context.model('Person');
+            const {viewAdapter: OrderStatusTypes} = context.model('OrderStatusType');
+            const q = new QueryExpression().select(
+                'id', 'orderedItem', 'orderStatus', 'orderDate'
+            ).from(Orders).join(new QueryEntity(Customers).as('customers')).with(
+                new QueryExpression().where(
+                    new QueryField('customer').from(Orders)
+                ).equal(
+                    new QueryField('id').from('customers')
+                )
+            ).join(new QueryEntity(OrderStatusTypes).as('orderStatusTypes')).with(
+                new QueryExpression().where(
+                    new QueryField('orderStatus').from(Orders)
+                ).equal(
+                    new QueryField('id').from('orderStatusTypes')
+                )
+            ).where(new QueryField('description').from('customers')).equal('Eric Thomas');
+            const select = q.$select[Orders];
+            select.push({
+                customer: {
+                    $jsonObject: [
+                        new QueryField('familyName').from('customers'),
+                        new QueryField('givenName').from('customers'),
+                    ]
+                }
+            }, {
+                orderStatus: {
+                    $jsonObject: [
+                        new QueryField('name').from('orderStatusTypes').as('name'),
+                        new QueryField('alternateName').from('orderStatusTypes').as('alternateName'),
+                    ]
+                }
+            });
+            /**
+             * @type {Array<{id: number, orderedItem: number, orderDate: Date, orderStatus: { name: string, alternateName: string }, customer: {familyName: string, givenName: string}}>}
+             */
+            const items = await context.db.executeAsync(q, []);
+            expect(items).toBeTruthy();
+            for (const item of items) {
+                expect(item.customer).toBeTruthy();
+                expect(item.customer.familyName).toEqual('Thomas');
+                expect(item.customer.givenName).toEqual('Eric');
+                expect(item.orderStatus).toBeTruthy();
+                expect(item.orderStatus.name).toBeTruthy();
+            }
+
+        });
+    });
+
+    it('should use json queries for expand customer and orderedItem', async () => {
+        // set context user
+        context.user = {
+            name: 'james.may@example.com'
+          };
+        const items = await context.model('Order').asQueryable().select(
+            'id', 'orderDate', 'orderStatus', 'customer', 'orderedItem'
+        ).expand('customer', 'orderStatus', 'orderedItem').getItems();
+        expect(items.length).toBeTruthy();
+        // create ad-hoc query
+        const { viewAdapter: Orders } = context.model('Order');
+        const { viewAdapter: People } = context.model('Person');
+        const { viewAdapter: Products } = context.model('Product');
+        const { viewAdapter: OrderStatusTypes } = context.model('OrderStatusType');
+        const q = new QueryExpression().select(
+            new QueryField('id').from(Orders),
+            new QueryField('orderDate').from(Orders),
+            new QueryField({
+                customer: {
+                    $jsonObject: [
+                        new QueryField('id').from('customer'),
+                        new QueryField('givenName').from('customer'),
+                        new QueryField('familyName').from('customer'),
+                        new QueryField('email').from('customer'),
+                        new QueryField('description').from('customer'),
+                        new QueryField('address').from('customer')
+                    ]
+                }
+            }),
+        ).from(Orders).join(new QueryEntity(People).as('customer')).with(
+            new QueryExpression().where(
+                new QueryField('customer').from(Orders)
+            ).equal(
+                new QueryField('id').from('customer')
+            )
+        ).join(new QueryEntity(Products).as('orderedItem')).with(
+            new QueryExpression().where(
+                new QueryField('orderedItem').from(Orders)
+            ).equal(
+                new QueryField('id').from('orderedItem')
+            )
+        ).join(new QueryEntity(OrderStatusTypes).as('orderStatus')).with(
+            new QueryExpression().where(
+                new QueryField('orderStatus').from(Orders)
+            ).equal(
+                new QueryField('id').from('orderStatus')
+            )
+        ).where(new QueryField('email').from('customer')).equal(context.user.name);
+
+        const customerOrders = await context.db.executeAsync(q, []);
+        expect(customerOrders.length).toBeTruthy();
+        expect(items.length).toEqual(customerOrders.length);
+    });
+
+    /**
+     * todo: test sql with json_build_object
+     * 
+SELECT "OrderData"."id", "OrderData"."orderDate",
+    "OrderData"."orderStatus", "customer"."json" as "customer"
+    FROM "OrderData" 
+    INNER JOIN (
+        SELECT "PersonData"."id" as "id", json_build_object('id',"PersonData"."id",
+        'givenName',"PersonData"."givenName",
+        'familyName',"PersonData"."familyName") as "json"
+        FROM "PersonData"
+    ) as "customer" ON "OrderData"."customer" = "customer"."id"
+LIMIT 10
+     */
+    
 
 });

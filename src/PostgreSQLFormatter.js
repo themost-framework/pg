@@ -1,5 +1,5 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
-import { SqlFormatter, QueryExpression } from '@themost/query';
+import { SqlFormatter, QueryExpression, QueryField } from '@themost/query';
 import { sprintf } from 'sprintf-js';
 
 const SINGLE_QUOTE_ESCAPE ='\'\'';
@@ -298,6 +298,35 @@ class PostgreSQLFormatter extends SqlFormatter {
             default:
                 return 'CURRENT_TIMESTAMP::timestamp';
         }
+    }
+
+    /**
+     * @param {...*} expr
+     */
+    // eslint-disable-next-line no-unused-vars
+    $jsonObject(expr) {
+        // expected an array of QueryField objects
+        const args = Array.from(arguments).reduce((previous, current) => {
+            // get the first key of the current object
+            let [name] = Object.keys(current);
+            let value;
+            // if the name is not a string then throw an error
+            if (typeof name !== 'string') {
+                throw new Error('Invalid json object expression. The attribute name cannot be determined.');
+            }
+            // if the given name is a dialect function (starts with $) then use the current value as is
+            // otherwise create a new QueryField object
+            if (name.startsWith('$')) {
+                value = new QueryField(current[name]);
+                name = value.getName();
+            } else {
+                value = current instanceof QueryField ? new QueryField(current[name]) : current[name];
+            }
+            // escape json attribute name and value
+            previous.push(this.escape(name), this.escape(value));
+            return previous;
+        }, []);
+        return `json_build_object(${args.join(',')})`;
     }
 }
 
