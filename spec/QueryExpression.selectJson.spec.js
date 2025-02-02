@@ -5,6 +5,9 @@ import { PostgreSQLFormatter } from '@themost/pg';
 import SimpleOrderSchema from './config/models/SimpleOrder.json';
 import {TestApplication} from './TestApplication';
 import { TraceUtils } from '@themost/common';
+import { DataPermissionEventListener } from '@themost/data';
+import { promisify } from 'util';
+const beforeExecuteAsync = promisify(DataPermissionEventListener.prototype.beforeExecute);
 
 /**
  * @param { import('../src').SqliteAdapter } db
@@ -396,35 +399,50 @@ describe('SqlFormatter', () => {
         });
     });
 
-    it('should use json queries for expand customer and orderedItem', async () => {
+    it('should use json queries for expand entities', async () => {
         // set context user
         context.user = {
             name: 'james.may@example.com'
           };
+        let start= new Date().getTime();
         const items = await context.model('Order').asQueryable().select(
             'id', 'orderDate', 'orderStatus', 'customer', 'orderedItem'
         ).expand('customer', 'orderStatus', 'orderedItem').getItems();
+        let end = new Date().getTime();
+        TraceUtils.log('Elapsed time: ' + (end-start) + 'ms');
         expect(items.length).toBeTruthy();
         // create ad-hoc query
         const { viewAdapter: Orders } = context.model('Order');
-        const { viewAdapter: People } = context.model('Person');
+        const { viewAdapter: People  } = context.model('Person');
         const { viewAdapter: Products } = context.model('Product');
         const { viewAdapter: OrderStatusTypes } = context.model('OrderStatusType');
+        const personAttributes = context.model('Person').select().query.$select[People].map((x) => {
+            return x.from('customer');
+        });
+        const productAttributes = context.model('Product').select().query.$select[Products].map((x) => {
+            return x.from('orderedItem');
+        });
+        const orderStatusAttributes = context.model('OrderStatusType').select().query.$select[OrderStatusTypes].map((x) => {
+            return x.from('orderStatus');
+        });
         const q = new QueryExpression().select(
             new QueryField('id').from(Orders),
             new QueryField('orderDate').from(Orders),
             new QueryField({
                 customer: {
-                    $jsonObject: [
-                        new QueryField('id').from('customer'),
-                        new QueryField('givenName').from('customer'),
-                        new QueryField('familyName').from('customer'),
-                        new QueryField('email').from('customer'),
-                        new QueryField('description').from('customer'),
-                        new QueryField('address').from('customer')
-                    ]
+                    $jsonObject: personAttributes
                 }
             }),
+            new QueryField({
+                product: {
+                    $jsonObject: productAttributes
+                }
+            }),
+            new QueryField({
+                orderStatus: {
+                    $jsonObject: orderStatusAttributes
+                }
+            })
         ).from(Orders).join(new QueryEntity(People).as('customer')).with(
             new QueryExpression().where(
                 new QueryField('customer').from(Orders)
@@ -445,9 +463,146 @@ describe('SqlFormatter', () => {
             )
         ).where(new QueryField('email').from('customer')).equal(context.user.name);
 
+        start= new Date().getTime();
         const customerOrders = await context.db.executeAsync(q, []);
+        end = new Date().getTime();
+        TraceUtils.log('Elapsed time: ' + (end-start) + 'ms');
         expect(customerOrders.length).toBeTruthy();
         expect(items.length).toEqual(customerOrders.length);
+    });
+
+    it('should use json queries and validate permission', async () => {
+        // set context user
+        context.user = {
+            name: 'james.may@example.com'
+          };
+        const queryOrders = context.model('Order').asQueryable().select().flatten();
+        const { viewAdapter: Orders } = queryOrders.model;
+        expect(queryOrders).toBeTruthy();
+        // prepare query for customer
+        const queryPeople = context.model('Person').asQueryable().select().flatten();
+        await beforeExecuteAsync({
+            model: queryPeople.model,
+            emitter: queryPeople,
+            query: queryPeople.query,
+        });
+        expect(queryPeople).toBeTruthy();
+        // prepare query for order status
+        const queryOrderStatus = context.model('OrderStatusType').asQueryable().select().flatten();
+        await beforeExecuteAsync({
+            model: queryOrderStatus.model,
+            emitter: queryOrderStatus,
+            query: queryOrderStatus.query,
+        });
+        // prepare query for ordered item
+        const queryProducts = context.model('Product').asQueryable().select().flatten();
+        await beforeExecuteAsync({
+            model: queryProducts.model,
+            emitter: queryProducts,
+            query: queryProducts.query,
+        });
+
+        // phase 1: join customers in order to get customer as json object
+        const { viewAdapter: People  } = queryPeople.model;
+        // select customer as json object
+        const selectCustomer = new QueryField({
+            customer: {
+                $jsonObject: queryPeople.query.$select[People].map((x) => {
+                    return x.from('customer');
+                })
+            }
+        });
+        // remove select arguments from nested query and push a wildcard select
+        // important note: this operation reduces the size of the subquery used for join entity
+        queryPeople.query.$select[People] = [new QueryField(`${People}.*`)];
+        // join entity
+        queryOrders.query.join(queryPeople.query.as('customer')).with(
+            new QueryExpression().where(
+                new QueryField('customer').from(Orders)
+            ).equal(
+                new QueryField('id').from('customer')
+            )
+        )
+        // append customer json object
+        
+        const selectOrders = queryOrders.query.$select[Orders];
+        // remove previoulsy selected customer field
+        let removeIndex = selectOrders.findIndex((x) => x instanceof QueryField && x.$name === `${Orders}.customer`);
+        if (removeIndex >= 0) {
+            selectOrders.splice(removeIndex, 1);
+        }
+        // add customer json object
+        selectOrders.push(selectCustomer);
+
+        // phase 2: join ordered items in order to get ordered item as json object
+        const { viewAdapter: Products } = queryProducts.model;
+        // select ordered item as json object
+        const selectOrderedItem = new QueryField({
+            orderedItem: {
+                $jsonObject: queryProducts.query.$select[Products].map((x) => {
+                    return x.from('orderedItem');
+                })
+            }
+        });
+        // remove select arguments from nested query and push a wildcard select
+        // important note: this operation reduces the size of the subquery used for join entity
+        queryProducts.query.$select[Products] = [new QueryField(`${Products}.*`)];
+        // join entity
+        queryOrders.query.join(queryProducts.query.as('orderedItem')).with(
+            new QueryExpression().where(
+                new QueryField('orderedItem').from(Orders)
+            ).equal(
+                new QueryField('id').from('orderedItem')
+            )
+        )
+        removeIndex = selectOrders.findIndex((x) => x instanceof QueryField && x.$name === `${Orders}.orderedItem`);
+        if (removeIndex >= 0) {
+            selectOrders.splice(removeIndex, 1);
+        }
+        // add ordered json object
+        selectOrders.push(selectOrderedItem);
+
+        // phase 3: join order status in order to get order status as json object
+        const { viewAdapter: OrderStatusTypes } = queryOrderStatus.model;
+        // select order status as json object
+        const selectOrderStatus = new QueryField({
+            orderStatus: {
+                $jsonObject: queryOrderStatus.query.$select[OrderStatusTypes].map((x) => {
+                    return x.from('orderStatus');
+                })
+            }
+        });
+        // remove select arguments from nested query and push a wildcard select
+        // important note: this operation reduces the size of the subquery used for join entity
+        queryOrderStatus.query.$select[OrderStatusTypes] = [new QueryField(`${OrderStatusTypes}.*`)];
+        // join entity
+        queryOrders.query.join(queryOrderStatus.query.as('orderStatus')).with(
+            new QueryExpression().where(
+                new QueryField('orderStatus').from(Orders)
+            ).equal(
+                new QueryField('id').from('orderStatus')
+            )
+        );
+        removeIndex = selectOrders.findIndex((x) => x instanceof QueryField && x.$name === `${Orders}.orderStatus`);
+        if (removeIndex >= 0) {
+            selectOrders.splice(removeIndex, 1);
+        }
+        // add order status json object
+        selectOrders.push(selectOrderStatus);
+
+        let start= new Date().getTime();
+        const items = await queryOrders.getItems();
+        let end = new Date().getTime();
+        TraceUtils.log('Elapsed time: ' + (end-start) + 'ms');
+        expect(items.length).toBeTruthy();
+        for (const item of items) {
+            expect(item.customer).toBeInstanceOf(Object);
+            expect(item.orderedItem).toBeInstanceOf(Object);
+        }
+        
+
+        
+
     });
 
     /**
