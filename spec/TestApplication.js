@@ -103,10 +103,22 @@ class TestApplication extends DataApplication {
         const context = this.createContext();
         try {
             await func(context);
-        } catch (err) {
-            await context.finalizeAsync();
-            throw err;
+        } finally {
+            if (context) {
+                await context.finalizeAsync();
+            }
         }
+    }
+
+    createContext() {
+        const context = super.createContext();
+        context.finalizeAsync = async function() {
+            if (this.db) {
+                await this.db.closeAsync();
+            }
+            this.db = null;
+        };
+        return context;
     }
 
     /**
@@ -266,11 +278,10 @@ class TestApplication extends DataApplication {
                 version: '1.0'
             }).into('migrations'));
             await context.finalizeAsync();
-        } catch (error) {
+        } finally {
             if (context) {
                 await context.finalizeAsync();
             }
-            throw error;
         }
     }
 
