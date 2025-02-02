@@ -5,6 +5,7 @@ import { TraceUtils } from '@themost/common';
 import { PostgreSQLFormatter } from './PostgreSQLFormatter';
 import { sprintf } from 'sprintf-js';
 import { LangUtils } from '@themost/common';
+import { AsyncSeriesEventEmitter, before, after } from '@themost/events';
 
 const parseInteger = LangUtils.parseInt;
 
@@ -48,6 +49,8 @@ class PostgreSQLAdapter {
                     self.options.database);
             }, enumerable: false, configurable: false
         });
+        this.executing = new AsyncSeriesEventEmitter();
+        this.executed = new AsyncSeriesEventEmitter();
     }
 
     /**
@@ -173,6 +176,30 @@ class PostgreSQLAdapter {
         return SqlUtils.format(query, values);
     }
 
+    @after(({target, args}, callback) => {
+        const [query, params] = args;
+        void target.executed.emit({
+            target,
+            query,
+            params
+        }).then(() => {
+            return callback();
+        }).catch((err) => {
+            return callback(err);
+        });
+    })
+    @before(({target, args}, callback) => {
+        const [query, params] = args;
+        void target.executing.emit({
+            target,
+            query,
+            params
+        }).then(() => {
+            return callback();
+        }).catch((err) => {
+            return callback(err);
+        });
+    })
     /**
      * Executes a query against the underlying database
      * @param {string|*} query

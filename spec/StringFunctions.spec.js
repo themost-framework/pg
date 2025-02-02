@@ -15,7 +15,7 @@ describe('StringFunctions', () => {
         //
     });
     afterAll(async () => {
-        await app.finalize();
+        await app.finalizeAsync();
     });
     afterEach(async () => {
         //

@@ -11,6 +11,10 @@ export declare interface DataAdapterViews {
 }
 
 export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBaseHelper {
+
+    executing: AsyncSeriesEventEmitter<{target: this, query: (string|QueryExpression), params?: unknown[]}>;
+    executed: AsyncSeriesEventEmitter<{target: this, query: (string|QueryExpression), params?: unknown[], results: uknown[]}>;
+
     constructor(options?: any);
     table(name: string): DataAdapterTable;
     view(name: string): DataAdapterView;
