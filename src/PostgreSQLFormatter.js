@@ -1,6 +1,7 @@
 // MOST Web Framework Copyright (c) 2017-2022 THEMOST LP All Rights Reserved
 import { SqlFormatter, QueryExpression, QueryField } from '@themost/query';
 import { sprintf } from 'sprintf-js';
+import { isObjectDeep } from './isObjectDeep';
 
 const SINGLE_QUOTE_ESCAPE ='\'\'';
 const DOUBLE_QUOTE_ESCAPE = '"';
@@ -63,6 +64,19 @@ class PostgreSQLFormatter extends SqlFormatter {
      * @returns {string} - The equivalent SQL string value
      */
     escape(value, unquoted) {
+        // serialize array of objects as json array
+        if (Array.isArray(value)) {
+            // find first non-object value
+            const index = value.filter((x) => {
+                return x != null;
+            }).findIndex((x) => {
+                return isObjectDeep(x) === false;
+            });
+            // if all values are objects
+            if (index === -1) {
+                return this.escape(JSON.stringify(value)); // return as json array
+            }
+        }
         let res = super.escape.bind(this)(value, unquoted);
         if (typeof value === 'string') {
             if (/\\'/g.test(res))
@@ -235,14 +249,6 @@ class PostgreSQLFormatter extends SqlFormatter {
         return `${extract}->>'${parts.join('.')}'`;
     }
 
-    /**
-     * @param {*} expr
-     * @return {string}
-     */
-    $jsonArray(expr) {
-        return `json_each(${this.escapeName(expr)})`;
-    }
-
     $toString(expr) {
         return sprintf('CAST(%s as VARCHAR)', this.escape(expr));
     }
@@ -328,6 +334,75 @@ class PostgreSQLFormatter extends SqlFormatter {
         }, []);
         return `json_build_object(${args.join(',')})`;
     }
+
+    /**
+     * @param {{ $jsonGet: Array<*> }} expr
+     */
+    $jsonGroupArray(expr) {
+        const [key] = Object.keys(expr);
+        if (key !== '$jsonObject') {
+            throw new Error('Invalid json group array expression. Expected a json object expression');
+        }
+        return `json_agg(${this.escape(expr)})`;
+    }
+
+    /**
+     * @param {import('@themost/query').QueryExpression} expr
+     */
+    $jsonArray(expr) {
+        if (expr == null) {
+            throw new Error('The given query expression cannot be null');
+        }
+        if (expr instanceof QueryField) {
+            // escape expr as field and waiting for parsing results as json array
+            return this.escape(expr);
+        }
+        // trear expr as select expression
+        if (expr.$select) {
+            // get select fields
+            const args = Object.keys(expr.$select).reduce((previous, key) => {
+                previous.push.apply(previous, expr.$select[key]);
+                return previous;
+            }, []);
+            const [key] = Object.keys(expr.$select);
+            // prepare select expression to return json array   
+            expr.$select[key] = [
+                {
+                    $jsonGroupArray: [ // use json_group_array function
+                        {
+                            $jsonObject: args // use json_object function
+                        }
+                    ]
+                }
+            ];
+            return `(${this.format(expr)})`;
+        }
+        // treat expression as query field
+        if (Object.prototype.hasOwnProperty.call(expr, '$name')) {
+            return this.escape(expr);
+        }
+        // treat expression as value
+        if (Object.prototype.hasOwnProperty.call(expr, '$value')) {
+            if (Array.isArray(expr.$value)) {
+                const values = expr.$value.map((x) => {
+                    return this.escape(x);
+                }).join(',');
+                return `json_build_array(${values})`;
+            }
+            return this.escape(expr);
+        }
+        if (Object.prototype.hasOwnProperty.call(expr, '$literal')) {
+            if (Array.isArray(expr.$literal)) {
+                const values = expr.$literal.map((x) => {
+                    return this.escape(x);
+                }).join(',');
+                return `json_build_array(${values})`;
+            }
+            return this.escape(expr);
+        }
+        throw new Error('Invalid json array expression. Expected a valid select expression');
+    }
+
 }
 
 export {

@@ -17,7 +17,9 @@ async function createSimpleOrders(db) {
     const { source } = SimpleOrderSchema;
     const exists = await db.table(source).existsAsync();
     if (!exists) {
-        await db.table(source).createAsync(SimpleOrderSchema.fields);
+        await db.table(source).createAsync(SimpleOrderSchema.fields);    
+    } else {
+        return;
     }
     // get some orders
     const orders = await db.executeAsync(
@@ -61,7 +63,19 @@ async function createSimpleOrders(db) {
                 return {id, streetAddress, postalCode, addressLocality, addressCountry, telephone };
             }), []
     );
-    // get
+
+    const shuffleArray = (array) => {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    };
+    
+    const getRandomItems = (array, numItems) => {
+        const shuffledArray = shuffleArray([...array]);
+        return shuffledArray.slice(0, numItems);
+    };
     const items = orders.map((order) => {
         const { orderDate, discount, discountCode, orderNumber, paymentDue,
         dateCreated, dateModified, createdBy, modifiedBy } = order;
@@ -73,6 +87,8 @@ async function createSimpleOrders(db) {
             customer.address = postalAddresses.find((x) => x.id === customer.address);
             delete customer.address?.id;
         }
+        // get 2 random payment methods
+        const additionalPaymentMethods = getRandomItems(paymentMethods, 2);
         return {
             orderDate,
             discount,
@@ -82,6 +98,7 @@ async function createSimpleOrders(db) {
             orderStatus,
             orderedItem,
             paymentMethod,
+            additionalPaymentMethods,
             customer,
             dateCreated,
             dateModified,
@@ -599,26 +616,99 @@ describe('SqlFormatter', () => {
             expect(item.customer).toBeInstanceOf(Object);
             expect(item.orderedItem).toBeInstanceOf(Object);
         }
-        
-
-        
-
     });
 
-    /**
-     * todo: test sql with json_build_object
-     * 
-SELECT "OrderData"."id", "OrderData"."orderDate",
-    "OrderData"."orderStatus", "customer"."json" as "customer"
-    FROM "OrderData" 
-    INNER JOIN (
-        SELECT "PersonData"."id" as "id", json_build_object('id',"PersonData"."id",
-        'givenName',"PersonData"."givenName",
-        'familyName',"PersonData"."familyName") as "json"
-        FROM "PersonData"
-    ) as "customer" ON "OrderData"."customer" = "customer"."id"
-LIMIT 10
-     */
-    
+    it('should return json arrays', async () => {
+        // set context user
+        context.user = {
+            name: 'alexis.rees@example.com'
+          };
+        
+        const queryPeople = context.model('Person').asQueryable().select(
+            'id', 'familyName', 'givenName', 'jobTitle', 'email'
+        ).flatten();
+        await beforeExecuteAsync({
+            model: queryPeople.model,
+            emitter: queryPeople,
+            query: queryPeople.query,
+        });
+        const { viewAdapter: People  } = queryPeople.model;
+        const queryOrders = context.model('Order').asQueryable().select(
+            'id', 'orderDate', 'orderStatus', 'orderedItem', 'customer'
+        ).flatten();
+        const { viewAdapter: Orders  } = queryOrders.model;
+        // prepare query for each customer
+        queryOrders.query.where(
+            new QueryField('customer').from(Orders)
+        ).equal(
+            new QueryField('id').from(People)
+        );
+        const selectPeople = queryPeople.query.$select[People];
+        // add orders as json array
+        selectPeople.push({
+            orders: {
+                $jsonArray: [
+                    queryOrders.query
+                ]
+            }
+        });
+        const start= new Date().getTime();
+        const items = await queryPeople.take(50).getItems();
+        const end = new Date().getTime();
+        TraceUtils.log('Elapsed time: ' + (end-start) + 'ms');
+        expect(items.length).toBeTruthy();
+        for (const item of items) {
+            expect(Array.isArray(item.orders)).toBeTruthy();
+            for (const order of item.orders) {
+                expect(order.customer).toEqual(item.id);
+            }
 
+        }
+    });
+
+    it('should parse string as json array', async () => {
+        // set context user
+        context.user = {
+            name: 'alexis.rees@example.com'
+          };
+        const { viewAdapter: People  } = context.model('Person');
+        const query = new QueryExpression().select(
+            'id', 'familyName', 'givenName', 'jobTitle', 'email',
+            new QueryField({
+                tags: {
+                    $jsonArray: [
+                        new QueryField({
+                            $value: '[ "user", "customer", "admin" ]'
+                        })
+                    ]
+                }
+            })
+        ).from(People).where('email').equal(context.user.name);
+        const [item] = await context.db.executeAsync(query);
+        expect(item).toBeTruthy();
+    });
+
+    it('should parse array as json array', async () => {
+        // set context user
+        context.user = {
+            name: 'alexis.rees@example.com'
+          };
+        const { viewAdapter: People  } = context.model('Person');
+        const query = new QueryExpression().select(
+            'id', 'familyName', 'givenName', 'jobTitle', 'email',
+            new QueryField({
+                tags: {
+                    $jsonArray: [
+                        {
+                            $value: [ 'user', 'customer', 'admin' ]
+                        }
+                    ]
+                }
+            })
+        ).from(People).where('email').equal(context.user.name);
+        const [item] = await context.db.executeAsync(query);
+        expect(item).toBeTruthy();
+        expect(Array.isArray(item.tags)).toBeTruthy();
+        expect(item.tags).toEqual([ 'user', 'customer', 'admin' ]);
+    });
 });
