@@ -220,7 +220,7 @@ class PostgreSQLAdapter {
             }
             else {
                 //format query expression or any object that may act as query expression
-                const formatter = new PostgreSQLFormatter();
+                const formatter = this.getFormatter();
                 sql = formatter.format(query);
             }
             //validate sql statement
@@ -553,7 +553,7 @@ class PostgreSQLAdapter {
     }
 
     refreshView(name, query, callback) {
-        const formatter = new PostgreSQLFormatter();
+        const formatter = this.getFormatter();
         this.execute('REFRESH MATERIALIZED VIEW ' + formatter.escapeName(name), null, function (err) {
             callback(err);
         });
@@ -694,7 +694,7 @@ class PostgreSQLAdapter {
                 if (fields.length === 0) {
                     return callback(new Error('Invalid argument. Fields collection cannot be empty.'));
                 }
-                const formatter = new PostgreSQLFormatter();
+                const formatter = self.getFormatter();
                 let strFields = fields.filter((x) => {
                     return !x.oneToMany;
                 }).map((field) => {
@@ -712,7 +712,7 @@ class PostgreSQLAdapter {
                     strFields += ', ';
                     strFields += sprintf('PRIMARY KEY(%s)', strPKFields);
                 }
-                const escapedTable = new PostgreSQLFormatter().escapeName(name);
+                const escapedTable = self.getFormatter().escapeName(name);
                 const sql = sprintf('CREATE TABLE %s (%s)', escapedTable, strFields);
                 self.execute(sql, null, function (err) {
                     callback(err);
@@ -745,8 +745,8 @@ class PostgreSQLAdapter {
                     return callback();
                 }
                 // generate SQL statement
-                const formatter = new PostgreSQLFormatter();
-                const escapedTable = new PostgreSQLFormatter().escapeName(name);
+                const formatter = self.getFormatter();
+                const escapedTable = formatter.escapeName(name);
                 const sql = fields.map((field) => {
                     const escapedField = formatter.escapeName(field.name);
                     return sprintf('ALTER TABLE %s ADD COLUMN %s %s', escapedTable, escapedField, self.formatType(field));
@@ -782,7 +782,7 @@ class PostgreSQLAdapter {
                     return callback();
                 }
                 //generate SQL statement
-                const formatter = new PostgreSQLFormatter();
+                const formatter = self.getFormatter();
                 const escapedTable = formatter.escapeName(name);
                 let sql = fields.map((field) => {
                     const escapedType = self.formatType(field, '%t');
@@ -872,7 +872,7 @@ class PostgreSQLAdapter {
                         }
                         const exists = (result[0].count > 0);
                         if (exists) {
-                            const formatter = new PostgreSQLFormatter();
+                            const formatter = self.getFormatter();
                             const sql = sprintf('DROP VIEW %s', formatter.escapeName(name));
                             return self.execute(sql, [], function (err) {
                                 if (err) {
@@ -907,7 +907,7 @@ class PostgreSQLAdapter {
                             return transcactionCallback(err);
                         }
                         try {
-                            const formatter = new PostgreSQLFormatter();
+                            const formatter = self.getFormatter();
                             const sql = sprintf('CREATE VIEW %s AS ', formatter.escapeName(name)) + formatter.format(q);
                             return self.execute(sql, [], (err) => {
                                 return transcactionCallback(err);
@@ -1072,7 +1072,7 @@ class PostgreSQLAdapter {
             //get table name
             table = matches[2];
         }
-        const formatter = new PostgreSQLFormatter();
+        const formatter = self.getFormatter();
         return {
             list: function (callback) {
                 const this1 = this;
@@ -1291,7 +1291,7 @@ class PostgreSQLAdapter {
                 });
             },
             create: function (callback) {
-                const formatter = new PostgreSQLFormatter();
+                const formatter = self.getFormatter();
                 return self.execute(`CREATE DATABASE ${formatter.escapeName(name)};`, [], (err, results) => {
                     if (err) {
                         return callback();
@@ -1363,6 +1363,10 @@ FROM "pg_catalog"."pg_views" WHERE "schemaname" <> 'pg_catalog' AND "schemaname"
                 });
             }
         }
+     }
+
+     getFormatter() {
+        return new PostgreSQLFormatter();
      }
 
 }

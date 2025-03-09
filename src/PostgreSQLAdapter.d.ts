@@ -1,4 +1,5 @@
 import { DataAdapterBase, DataAdapterBaseHelper, DataAdapterDatabase, DataAdapterIndexes, DataAdapterMigration, DataAdapterTable, DataAdapterView } from '@themost/common';
+import { SqlFormatter } from '@themost/query';
 
 export declare interface DataAdapterTables {
     list(callback: (err: Error, result: { name: string, owner?: string, schema?: string }[]) => void): void;
@@ -37,4 +38,5 @@ export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBa
     createView(name: string, query: any, callback: (err: Error) => void): void;
     tables(): DataAdapterTables;
     views(): DataAdapterViews;
+    getFormatter(): SqlFormatter;
 }
