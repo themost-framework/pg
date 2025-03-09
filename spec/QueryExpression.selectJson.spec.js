@@ -5,7 +5,7 @@ import { PostgreSQLFormatter } from '@themost/pg';
 import SimpleOrderSchema from './config/models/SimpleOrder.json';
 import {TestApplication} from './TestApplication';
 import { TraceUtils } from '@themost/common';
-import { DataPermissionEventListener } from '@themost/data';
+import { DataPermissionEventListener, executeInUnattendedMode, executeInUnattendedModeAsync } from '@themost/data';
 import { promisify } from 'util';
 const beforeExecuteAsync = promisify(DataPermissionEventListener.prototype.beforeExecute);
 
@@ -623,7 +623,14 @@ describe('SqlFormatter', () => {
         context.user = {
             name: 'alexis.rees@example.com'
           };
-        
+        await executeInUnattendedModeAsync(context, async () => {
+            const user = await context.model('User').where('name').equal(context.interactiveUser.name).getItem();
+            user.groups = [
+                { name: 'Administrators' },
+                { name: 'Users' }
+            ];
+            await context.model('User').save(user);
+        });
         const queryPeople = context.model('Person').asQueryable().select(
             'id', 'familyName', 'givenName', 'jobTitle', 'email'
         ).flatten();
