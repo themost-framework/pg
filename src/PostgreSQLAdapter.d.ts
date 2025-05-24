@@ -39,4 +39,6 @@ export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBa
     tables(): DataAdapterTables;
     views(): DataAdapterViews;
     getFormatter(): SqlFormatter;
+    tables(): DataAdapterTables;
+    views(): DataAdapterViews;
 }
