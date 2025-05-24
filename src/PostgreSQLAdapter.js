@@ -654,9 +654,22 @@ class PostgreSQLAdapter {
              */
             columns: function (callback) {
                 callback = callback || function () { };
-                self.execute('SELECT column_name AS "name", ordinal_position as "ordinal", data_type as "type",' +
-                    'character_maximum_length as "size", is_nullable AS  "nullable", column_default AS "defaultValue"' +
-                    ' FROM information_schema.columns WHERE table_name=? AND table_schema=?',
+                self.execute(`SELECT cols.column_name AS "name", cols.ordinal_position as "ordinal", cols.data_type as "type",
+    cols.character_maximum_length as "size", cols.is_nullable AS  "nullable", cols.column_default AS "defaultValue",
+    cols.numeric_precision AS "precision", cols.numeric_scale AS "scale",
+    tco.constraint_type = 'PRIMARY KEY' AS "primary"
+    FROM information_schema.columns cols 
+    LEFT JOIN
+(SELECT u.column_name, u.table_name,
+    u.table_schema, c.constraint_type
+FROM information_schema.key_column_usage u
+JOIN information_schema.table_constraints c
+    ON u.constraint_name = c.constraint_name
+    AND c.constraint_type = 'PRIMARY KEY') tco
+    ON tco.column_name = cols.column_name
+    AND tco.table_name = cols.table_name
+    AND tco.table_schema = cols.table_schema
+    WHERE cols.table_name=? AND cols.table_schema=?`,
                     [
                         table,
                         schema
