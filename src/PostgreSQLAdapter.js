@@ -17,6 +17,23 @@ pg.types.setTypeParser(1700, function(val) {
     return val === null ? null : parseFloat(val);
 });
 
+/**
+ *
+ * @returns {import('@themost/common').TraceLogger}
+ */
+function createLogger() {
+    // noinspection JSUnresolvedReference
+    if (typeof TraceUtils.newLogger === 'function') {
+        // noinspection JSUnresolvedReference
+        return TraceUtils.newLogger();
+    }
+    const [loggerProperty] = Object.getOwnPropertySymbols(TraceUtils);
+    const logger = TraceUtils[loggerProperty];
+    const newLogger = Object.create(TraceUtils[loggerProperty]);
+    newLogger.options = Object.assign({}, logger.options);
+    return newLogger;
+}
+
 
 class PostgreSQLAdapter {
     /**
@@ -51,6 +68,26 @@ class PostgreSQLAdapter {
         });
         this.executing = new AsyncSeriesEventEmitter();
         this.executed = new AsyncSeriesEventEmitter();
+
+        /**
+         * create a new instance of logger
+         * @type {import('@themost/common').TraceLogger}
+         */
+        this.logger = createLogger();
+        // use log level from connection options, if any
+        if (typeof this.options.logLevel === 'string' && this.options.logLevel.length) {
+            // if the logger has level(string) function
+            if (typeof this.logger.level === 'function') {
+                // try to set log level
+                this.logger.level(this.options.logLevel);
+                // otherwise, check if logger has setLogLevel(string) function
+            } else { // noinspection JSUnresolvedReference
+                if (typeof this.logger.setLogLevel === 'function') {
+                    // noinspection JSUnresolvedReference
+                    this.logger.setLogLevel(this.options.logLevel);
+                }
+            }
+        }
     }
 
     /**
@@ -77,7 +114,7 @@ class PostgreSQLAdapter {
                 return callback(err);
             }
             if (process.env.NODE_ENV === 'development') {
-                TraceUtils.log(sprintf('SQL (Execution Time:%sms): Connect', (new Date()).getTime() - startTime));
+                self.logger.debug(sprintf('SQL (Execution Time:%sms): Connect', (new Date()).getTime() - startTime));
             }
             //and return
             callback(err);
@@ -123,8 +160,8 @@ class PostgreSQLAdapter {
             //try to close connection
             this.rawConnection.end((err) => {
                 if (err) {
-                    TraceUtils.error('An error occurred while closing database connection');
-                    TraceUtils.error(err);
+                    this.logger.error('An error occurred while closing database connection');
+                    this.logger.error(err);
                 }
                 this.rawConnection = null;
                 return callback();
@@ -137,8 +174,8 @@ class PostgreSQLAdapter {
             
         }
         catch (err) {
-            TraceUtils.error('An error occurred while trying to close database connection.');
-            TraceUtils.error(err);
+            this.logger.error('An error occurred while trying to close database connection.');
+            this.logger.error(err);
             this.rawConnection = null;
             //do nothing (do not raise an error)
             return callback();
@@ -243,11 +280,11 @@ class PostgreSQLAdapter {
                     //execute raw command
                     self.rawConnection.query(prepared, null, function (err, result) {
                         if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-                            TraceUtils.log(sprintf('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
+                            self.logger.debug(sprintf('SQL (Execution Time:%sms):%s, Parameters:%s', (new Date()).getTime() - startTime, prepared, JSON.stringify(values)));
                         }
                         if (err) {
                             //log sql
-                            TraceUtils.log(sprintf('SQL Error:%s', prepared));
+                            self.logger.debug(sprintf('SQL Error:%s', prepared));
                             callback(err);
                         }
                         else {
@@ -914,20 +951,20 @@ JOIN information_schema.table_constraints c
              */
             create: function (q, callback) {
                 const thisArg = this;
-                self.executeInTransaction(function (transcactionCallback) {
+                self.executeInTransaction(function (transactionCallback) {
                     return thisArg.drop((err) => {
                         if (err) {
-                            return transcactionCallback(err);
+                            return transactionCallback(err);
                         }
                         try {
                             const formatter = self.getFormatter();
                             const sql = sprintf('CREATE VIEW %s AS ', formatter.escapeName(name)) + formatter.format(q);
                             return self.execute(sql, [], (err) => {
-                                return transcactionCallback(err);
+                                return transactionCallback(err);
                             });
                         }
                         catch (error) {
-                            return transcactionCallback(error);
+                            return transactionCallback(error);
                         }
                     });
                 }, (err) => {

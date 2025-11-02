@@ -10,6 +10,7 @@ const testConnectionOptions = {
     'server': process.env.DB_HOST,
     'port': parseInt(process.env.DB_PORT, 10),
     'user': process.env.DB_USER,
+    'logLevel': 'debug',
     'database': 'test_db'
 };
 
@@ -23,6 +24,7 @@ const masterConnectionOptions = {
     'server': process.env.DB_HOST,
     'port': parseInt(process.env.DB_PORT, 10),
     'user': process.env.DB_USER,
+    'logLevel': 'debug',
     'database': 'postgres'
 };
 

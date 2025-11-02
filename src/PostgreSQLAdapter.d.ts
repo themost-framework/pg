@@ -1,5 +1,6 @@
 import { DataAdapterBase, DataAdapterBaseHelper, DataAdapterDatabase, DataAdapterIndexes, DataAdapterMigration, DataAdapterTable, DataAdapterView } from '@themost/common';
 import { SqlFormatter } from '@themost/query';
+import { TraceLogger } from '@themost/common';
 
 export declare interface DataAdapterTables {
     list(callback: (err: Error, result: { name: string, owner?: string, schema?: string }[]) => void): void;
@@ -12,6 +13,8 @@ export declare interface DataAdapterViews {
 }
 
 export declare class PostgreSQLAdapter implements DataAdapterBase, DataAdapterBaseHelper {
+
+    logger: TraceLogger;
 
     executing: AsyncSeriesEventEmitter<{target: this, query: (string|QueryExpression), params?: unknown[]}>;
     executed: AsyncSeriesEventEmitter<{target: this, query: (string|QueryExpression), params?: unknown[], results: uknown[]}>;
