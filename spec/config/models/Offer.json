@@ -50,6 +50,20 @@
             "title": "itemOffered",
             "description": "The item being offered.",
             "type": "Product"
+        },
+        {
+            "@id": "http://schema.org/addOn",
+            "name": "addOn",
+            "title": "addOn",
+            "description": "An additional item offered.",
+            "type": "Offer"
+        },
+        {
+            "@id": "http://schema.org/priceValidUntil",
+            "name": "priceValidUntil",
+            "title": "priceValidUntil",
+            "description": "The date until which the price is valid.",
+            "type": "DateTime"
         }
     ],
     "privileges": [

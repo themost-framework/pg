@@ -7,7 +7,7 @@ import { SqliteAdapter } from '@themost/sqlite';
 import path from 'path';
 
 const testConnectionOptions = {
-    'server': process.env.DB_HOST,
+    'host': process.env.DB_HOST,
     'port': parseInt(process.env.DB_PORT, 10),
     'user': process.env.DB_USER,
     'logLevel': 'debug',
@@ -21,7 +21,7 @@ if (process.env.DB_PASSWORD) {
 }
 
 const masterConnectionOptions = {
-    'server': process.env.DB_HOST,
+    'host': process.env.DB_HOST,
     'port': parseInt(process.env.DB_PORT, 10),
     'user': process.env.DB_USER,
     'logLevel': 'debug',
@@ -41,6 +41,14 @@ const sourceConnectionOptions = {
 class CancelTransactionError extends Error {
     constructor() {
         super();
+    }
+}
+
+function resetLogLevel(db, level) {
+    if (typeof db.logger.level === 'function') {
+        db.logger.level(level);
+    } else if (typeof db.logger.setLogLevel === 'function') {
+        db.logger.setLevel(level);
     }
 }
 
@@ -80,6 +88,11 @@ class TestApplication extends DataApplication {
         context.getConfiguration = () => {
             return this.configuration;
         };
+        if (typeof context.db.logger.level === 'function') {
+            context.db.logger.level('error');
+        } else if (typeof context.db.logger.setLogLevel === 'function') {
+            context.db.logger.setLevel('error');
+        }
         const exists = await context.db.database(testConnectionOptions.database).existsAsync();
         if (exists === false) {
             await context.db.executeAsync(`CREATE DATABASE ${testConnectionOptions.database};`);
@@ -173,6 +186,7 @@ class TestApplication extends DataApplication {
         try {
             this.configuration.useStrategy(ODataModelBuilder, ODataConventionModelBuilder);
             context = this.createContext();
+            resetLogLevel(context.db, 'error');
             const builder = this.configuration.getStrategy(ODataModelBuilder);
             const schema = await builder.getEdm();
             const entityTypes = schema.entityType.filter((item) => {
@@ -209,6 +223,7 @@ class TestApplication extends DataApplication {
         try {
             this.configuration.useStrategy(ODataModelBuilder, ODataConventionModelBuilder);
             context = this.createContext();
+            resetLogLevel(context.db, 'error');
             // validate if the operation has been already run
             const exists1 = await context.db.table('migrations').existsAsync();
             if (exists1 === true) {
@@ -226,6 +241,7 @@ class TestApplication extends DataApplication {
                 return item.abstract ? false : true;
             });
             const sourceAdapter = new SqliteAdapter(sourceConnectionOptions);
+            resetLogLevel(sourceAdapter, 'error');
             for (let entityType of entityTypes) {
                 TraceUtils.log(`Upgrading ${entityType.name}`);
                 await new Promise((resolve, reject) => {
