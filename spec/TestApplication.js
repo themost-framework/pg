@@ -66,20 +66,50 @@ class TestApplication extends DataApplication {
         // add adapter type
         const name = 'PostgreSQL Data Adapter';
         const invariantName = 'postgres';
-        dataConfiguration.adapterTypes.set(invariantName, {
-            name,
-            invariantName,
-            createInstance
-        });
-        dataConfiguration.adapterTypes.set('pool', {
-            'name': 'PostgreSQL Connection Pool',
-            'invariantName': 'pool',
-            createInstance: (options) => {
-                const db = createConnectionPool(options);
-                db.logger = TraceUtils.newLogger();
-                return db;
-            }
-        });
+        if (dataConfiguration.adapterTypes instanceof Map) {
+            dataConfiguration.adapterTypes.set(invariantName, {
+                name,
+                invariantName,
+                createInstance
+            });
+            dataConfiguration.adapterTypes.set('pool', {
+                'name': 'PostgreSQL Connection Pool',
+                'invariantName': 'pool',
+                createInstance: (options) => {
+                    const db = createConnectionPool(options);
+                    db.logger = TraceUtils.newLogger();
+                    return db;
+                }
+            });
+        } else {
+            // backward compatibility with old versions of @themost/data
+            Object.defineProperty(dataConfiguration.adapterTypes, invariantName, {
+                configurable: true,
+                enumerable: true,
+                writable: true,
+                value: {
+                    name,
+                    invariantName,
+                    createInstance
+                }
+            });
+            Object.defineProperty(dataConfiguration.adapterTypes, 'pool', {
+                configurable: true,
+                enumerable: true,
+                writable: true,
+                value: {
+                    'name': 'PostgreSQL Connection Pool',
+                    'invariantName': 'pool',
+                    createInstance: (options) => {
+                        const db = createConnectionPool(options);
+                        db.logger = TraceUtils.newLogger();
+                        return db;
+                    }
+                }
+            });
+        }
+
+
         dataConfiguration.adapters.push({
             name: 'master',
             invariantName: 'postgres',
