@@ -1,6 +1,7 @@
 // eslint-disable-next-line no-unused-vars
 import {DataApplication, DataConfigurationStrategy, NamedDataContext, DataCacheStrategy, DataContext, ODataModelBuilder, ODataConventionModelBuilder} from '@themost/data';
 import { createInstance, PostgreSQLFormatter } from '../src';
+import {createInstance as createConnectionPool, GenericPoolAdapter} from '@themost/pool';
 import { TraceUtils, LangUtils } from '@themost/common';
 import { QueryExpression } from '@themost/query';
 import { SqliteAdapter } from '@themost/sqlite';
@@ -70,6 +71,15 @@ class TestApplication extends DataApplication {
             invariantName,
             createInstance
         });
+        dataConfiguration.adapterTypes.set('pool', {
+            'name': 'PostgreSQL Connection Pool',
+            'invariantName': 'pool',
+            createInstance: (options) => {
+                const db = createConnectionPool(options);
+                db.logger = TraceUtils.newLogger();
+                return db;
+            }
+        });
         dataConfiguration.adapters.push({
             name: 'master',
             invariantName: 'postgres',
@@ -81,6 +91,14 @@ class TestApplication extends DataApplication {
             invariantName: 'postgres',
             default: true,
             options: testConnectionOptions
+        });
+        dataConfiguration.adapters.push({
+            name: 'test+with+connection+pool',
+            invariantName: 'pool',
+            default: false,
+            options: {
+                adapter: 'test'
+            }
         });
     }
     async tryCreateDatabase() {
@@ -104,6 +122,13 @@ class TestApplication extends DataApplication {
         const service = this.getConfiguration().getStrategy(DataCacheStrategy);
         if (typeof service.finalize === 'function') {
             await service.finalize();
+        }
+        const connectionPool = GenericPoolAdapter.pool('test');
+        if (connectionPool) {
+            // noinspection JSUnresolvedReference
+            await connectionPool.drain();
+            // noinspection JSUnresolvedReference
+            await connectionPool.clear();
         }
     }
 
@@ -140,7 +165,7 @@ class TestApplication extends DataApplication {
      * @param {TestContextFunction} func 
      * @returns {Promise<void>}
      */
-    executeInTestTranscaction(func) {
+    executeInTestTransaction(func) {
         return this.executeInTestContext((context) => {
             return new Promise((resolve, reject) => {
                 // start transaction

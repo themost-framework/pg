@@ -351,10 +351,14 @@ class PostgreSQLFormatter extends SqlFormatter {
     }
 
     /**
-     * @param {{ $jsonGet: Array<*> }} expr
+     * @param {{ $jsonGet: Array<*> }|{ $select: * }} expr
      */
     $jsonGroupArray(expr) {
         if (expr instanceof QueryField) {
+            return `json_agg(${this.escape(expr)})`;
+        }
+        // noinspection JSUnresolvedReference
+        if (expr && expr.$name) {
             return `json_agg(${this.escape(expr)})`;
         }
         // noinspection JSUnresolvedReference

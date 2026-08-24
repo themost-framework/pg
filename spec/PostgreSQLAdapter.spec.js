@@ -21,7 +21,7 @@ describe('PostgreSQLAdapter', () => {
         //
     });
     it('should check database', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let exists = await context.db.database('a_test_database').existsAsync();
             expect(exists).toBeFalsy();
             exists = await context.db.database('test_db').existsAsync();
@@ -30,14 +30,14 @@ describe('PostgreSQLAdapter', () => {
     });
 
     it('should check table', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const exists = await context.db.table('Table1').existsAsync();
             expect(exists).toBeFalsy();
         });
     });
 
     it('should create table', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const db = context.db;
             let exists = await db.table('Table1').existsAsync();
             expect(exists).toBeFalsy();
@@ -78,7 +78,7 @@ describe('PostgreSQLAdapter', () => {
     });
 
     it('should alter table', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const db = context.db;
             let exists = await db.table('Table2').existsAsync();
             expect(exists).toBeFalsy();
@@ -132,7 +132,7 @@ describe('PostgreSQLAdapter', () => {
 
     it('should create view', async () => {
 
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const db = context.db;
             let exists = await db.table('Table1').existsAsync();
             expect(exists).toBeFalsy();
@@ -176,7 +176,7 @@ describe('PostgreSQLAdapter', () => {
     });
 
     it('should create index', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const db = context.db;
             let exists = await db.table('Table1').existsAsync();
             expect(exists).toBeFalsy();
@@ -228,7 +228,7 @@ describe('PostgreSQLAdapter', () => {
     });
 
     it('should should list tables', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const db = context.db;
             const tables = await db.tables().listAsync();
             expect(tables).toBeInstanceOf(Array);
@@ -239,7 +239,7 @@ describe('PostgreSQLAdapter', () => {
     });
 
     it('should should list views', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const db = context.db;
             const views = await db.views().listAsync();
             expect(views).toBeInstanceOf(Array);

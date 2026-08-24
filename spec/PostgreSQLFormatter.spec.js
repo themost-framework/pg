@@ -23,7 +23,7 @@ describe('PostgreSQLFormatter', () => {
     });
 
     it('should get data', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const items = await context.model('ActionStatusType').silent().getItems();
             expect(items).toBeInstanceOf(Array);
             expect(items.length).toBeTruthy();
@@ -31,7 +31,7 @@ describe('PostgreSQLFormatter', () => {
     });
 
     it('should query data', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const item = await context.model('ActionStatusType')
                 .where('alternateName').equal('ActiveActionStatus').silent().getItem();
             expect(item).toBeTruthy();
@@ -66,7 +66,7 @@ describe('PostgreSQLFormatter', () => {
     });
 
     it('should use insert', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const insertUser = {
                 name: 'user1@example.com',
                 description: 'Test User',
@@ -84,7 +84,7 @@ describe('PostgreSQLFormatter', () => {
     });
 
     it('should use delete', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             const insertUser = {
                 name: 'user1@example.com',
                 description: 'Test User'
@@ -98,7 +98,7 @@ describe('PostgreSQLFormatter', () => {
     });
 
     it('should use count', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
 
             await context.model('User').silent().save({
                 name: 'admin1@example.com',
