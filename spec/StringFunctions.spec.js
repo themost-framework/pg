@@ -22,7 +22,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use indexOf()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').substr(0, 2).equal('Ap').getItems();
             expect(items).toBeInstanceOf(Array);
@@ -33,7 +33,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use startsWith()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').startsWith('Apple').equal(true).getItems();
             expect(items).toBeInstanceOf(Array);
@@ -44,7 +44,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use lower()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').toLowerCase().equal('apple ipad air').getItems();
             expect(items).toBeInstanceOf(Array);
@@ -56,7 +56,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use upper()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').toUpperCase().equal('APPLE IPAD AIR').getItems();
             expect(items).toBeInstanceOf(Array);
@@ -68,7 +68,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use endsWith()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').endsWith('Touch').equal(true).getItems();
             expect(items).toBeInstanceOf(Array);
@@ -79,7 +79,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use length()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').length().equal(14).getItems();
             expect(items).toBeInstanceOf(Array);
@@ -90,7 +90,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use substr()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').indexOf('Apple').greaterOrEqual(0).getItems();
             expect(items).toBeInstanceOf(Array);
@@ -101,7 +101,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use indexOf()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').substr(0, 2).equal('Ap').getItems();
             expect(items).toBeInstanceOf(Array);
@@ -112,7 +112,7 @@ describe('StringFunctions', () => {
     });
 
     it('should use contains()', async () => {
-        await app.executeInTestTranscaction(async (context) => {
+        await app.executeInTestTransaction(async (context) => {
             let items = await context.model('Product')
                 .asQueryable().where('name').contains('iMac').equal(true).getItems();
             expect(items).toBeInstanceOf(Array);
