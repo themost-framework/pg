@@ -355,11 +355,11 @@ class PostgreSQLFormatter extends SqlFormatter {
      */
     $jsonGroupArray(expr) {
         if (expr instanceof QueryField) {
-            return `json_agg(${this.escape(expr)})`;
+            return `COALESCE(json_agg(${this.escape(expr)}), '[]'::json)`;
         }
         // noinspection JSUnresolvedReference
         if (expr && expr.$name) {
-            return `json_agg(${this.escape(expr)})`;
+            return `COALESCE(json_agg(${this.escape(expr)}), '[]'::json)`;
         }
         // noinspection JSUnresolvedReference
         if (expr && expr.$select) {
@@ -404,23 +404,10 @@ class PostgreSQLFormatter extends SqlFormatter {
         }
         // trear expr as select expression
         if (expr.$select) {
-            // get select fields
-            const args = Object.keys(expr.$select).reduce((previous, key) => {
-                previous.push.apply(previous, expr.$select[key]);
-                return previous;
-            }, []);
-            const [key] = Object.keys(expr.$select);
-            // prepare select expression to return json array   
-            expr.$select[key] = [
-                {
-                    $jsonGroupArray: [ // use json_group_array function
-                        {
-                            $jsonObject: args // use json_object function
-                        }
-                    ]
-                }
-            ];
-            return `(${this.format(expr)})`;
+            if (typeof this.$query !== 'function') {
+                throw new Error('Invalid query expression. The given expression is a select expression but the current formatter does not support formatting inner select expressions. Please provide a valid query formatter that supports inner select expressions.');
+            }
+            return `(SELECT COALESCE(json_agg(t), '[]'::json) FROM (${this.$query(expr)}) t)`;
         }
         // treat expression as query field
         if (Object.prototype.hasOwnProperty.call(expr, '$name')) {

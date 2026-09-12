@@ -789,6 +789,9 @@ describe('SqlFormatter', () => {
             expect(item).toBeTruthy();
             expect(item.products).toBeTruthy();
             expect(Array.isArray(item.products)).toEqual(true);
+            for (const product of item.products) {
+                expect(typeof product).toBe('string');
+            }
         });
     });
 });
